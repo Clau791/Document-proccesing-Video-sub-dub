@@ -1,0 +1,11 @@
+# Flask - Framework pentru web server Python
+flask==3.0.0
+
+# Flask-CORS - Permite comunicarea între frontend (5173) și backend (3000)
+flask-cors==4.0.0
+
+# Requests - Pentru a face HTTP requests către API-ul extern
+requests==2.31.0
+
+# Python-dotenv - Pentru a citi fișiere .env (opțional)
+python-dotenv==1.0.0
