@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState , useEffect} from "react";
 import { FileText, Video, Subtitles, Download, Upload, CheckCircle, Loader, AlertCircle, X } from "lucide-react";
+import './styles/glass_buttons.css';
 
 /* =====================================================
    ✅ Cerințe implementate (FINAL + GLASS EFFECT)
@@ -37,179 +38,6 @@ const GlobalKeyframes = () => (
         </filter>
       </defs>
     </svg>
-    <style>{`
-
-      @keyframes colorShift { 0% { filter:hue-rotate(0deg) } 100% { filter:hue-rotate(60deg) } }
-      @keyframes slowPan { 0% { background-position:0% 0% } 100% { background-position:300% 300% } }
-      @keyframes floatXY { 0% { transform: translate(0,0) } 50% { transform: translate(10px,-10px) } 100% { transform: translate(0,0) } }
-      @keyframes sparkle { 0% { opacity: .12; transform: translateY(0) } 50% { opacity: .35; transform: translateY(2px) } 100% { opacity: .12; transform: translateY(0) } }
-      @keyframes grainShift { 0%{ transform:translate(0,0) } 100%{ transform:translate(-80px,-80px) } }
-      @keyframes shineSweep { 0% { transform: rotate(0deg) } 100% { transform: rotate(360deg) } }
-      @keyframes glowPulse { 0%,100% { opacity:.18 } 50% { opacity:.3 } }
-      @keyframes fadeUp { 
-        0% { opacity: 0; transform: translateY(30px); }
-        100% { opacity: 1; transform: translateY(0); }
-      }
-      @keyframes liquidFlow {
-        0%, 100% { background-position: 0% 50%; }
-        50% { background-position: 100% 50%; }
-      }
-      @keyframes waveMove {
-        0% { transform: translateX(0) translateY(0); }
-        50% { transform: translateX(-25px) translateY(15px); }
-        100% { transform: translateX(0) translateY(0); }
-      }
-      
-
-      /* Dropdown glass effect - Enhanced */
-      select {
-        position: relative;
-      }
-
-      select option {
-        background: rgba(255, 255, 255, 0.98) !important;
-        padding: 14px 16px !important;
-        font-weight: 500 !important;
-        color: #1f2937 !important;
-        transition: all 0.2s ease !important;
-      }
-
-      select option:checked {
-        background: linear-gradient(135deg, rgba(59, 130, 246, 0.95) 0%, rgba(96, 165, 250, 0.9) 100%) !important;
-        color: white !important;
-        font-weight: 600 !important;
-      }
-
-      select option:hover {
-        background: linear-gradient(135deg, rgba(147, 197, 253, 0.3) 0%, rgba(191, 219, 254, 0.25) 100%) !important;
-        color: #1e40af !important;
-      }
-
-      /* Dropdown list container styling (WebKit) */
-      select::-webkit-scrollbar {
-        width: 8px;
-      }
-
-      select::-webkit-scrollbar-track {
-        background: rgba(255, 255, 255, 0.5);
-        backdrop-filter: blur(10px);
-      }
-
-      select::-webkit-scrollbar-thumb {
-        background: linear-gradient(180deg, rgba(59, 130, 246, 0.6), rgba(96, 165, 250, 0.6));
-        border-radius: 4px;
-      }
-
-      select::-webkit-scrollbar-thumb:hover {
-        background: linear-gradient(180deg, rgba(59, 130, 246, 0.8), rgba(96, 165, 250, 0.8));
-      }
-        
-      /* LIQUID GLASS STYLES - Enhanced water effect */
-      .liquidGlass-wrapper {
-        position: relative;
-        display: flex;
-        font-weight: 600;
-        overflow: hidden;
-        color: black;
-        cursor: pointer;
-        box-shadow: 0 8px 12px rgba(0, 0, 0, 0.25), 0 0 30px rgba(59, 130, 246, 0.15);
-        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 2.2);
-      }
-      
-      .liquidGlass-effect {
-        position: absolute;
-        z-index: 0;
-        inset: 0;
-        backdrop-filter: blur(8px) saturate(180%);
-        -webkit-backdrop-filter: blur(8px) saturate(180%);
-        filter: url(#glass-distortion);
-        overflow: hidden;
-        isolation: isolate;
-      }
-      
-      .liquidGlass-tint {
-        z-index: 1;
-        position: absolute;
-        inset: 0;
-        background: linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, rgba(191, 219, 254, 0.25) 100%);
-        animation: waveMove 6s ease-in-out infinite;
-      }
-      
-      .liquidGlass-shine {
-        position: absolute;
-        inset: 0;
-        z-index: 2;
-        overflow: hidden;
-        box-shadow: inset 3px 3px 2px 0 rgba(255, 255, 255, 0.6),
-          inset -2px -2px 2px 1px rgba(255, 255, 255, 0.5),
-          inset 0 0 20px rgba(147, 197, 253, 0.2);
-      }
-      
-      .liquidGlass-content {
-        flex: 1;
-        position: relative;
-        z-index: 3;
-      }
-      
-      /* Card specific hover effect */
-      .liquidGlass-card {
-        padding: 2.5rem;
-        border-radius: 3rem;
-      }
-      
-      .liquidGlass-card:hover {
-        padding: 2.8rem;
-        border-radius: 3.5rem;
-      }
-      
-      .liquidGlass-card:hover .card-icon {
-        transform: scale(0.95);
-      }
-      
-      .card-icon {
-        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 2.2);
-      }
-      
-      /* Header/Footer specific */
-      .liquidGlass-header,
-      .liquidGlass-footer {
-        padding: 0.6rem;
-      }
-      
-      .liquidGlass-header:hover,
-      .liquidGlass-footer:hover {
-        padding: 0.8rem;
-      }
-      
-      .fade-up {
-        animation: fadeUp 1.5s ease-out forwards;
-      }
-      
-      .fade-up-delay-1 {
-        animation: fadeUp 1.5s ease-out 0.1s forwards;
-        opacity: 0;
-      }
-      
-      .fade-up-delay-2 {
-        animation: fadeUp 1.5s ease-out 0.2s forwards;
-        opacity: 0;
-      }
-      
-      .fade-up-delay-3 {
-        animation: fadeUp 1.5s ease-out 0.3s forwards;
-        opacity: 0;
-      }
-      
-      @media (prefers-reduced-motion: reduce) { 
-        [data-anim], .fade-up, .fade-up-delay-1, .fade-up-delay-2, .fade-up-delay-3,
-        .liquidGlass-wrapper, .card-icon { 
-          animation: none !important; 
-          transform: none !important;
-          opacity: 1 !important;
-          transition: none !important;
-        } 
-      }
-    `}</style>
   </>
 );
 
@@ -463,30 +291,44 @@ const HomeCards: React.FC<{ onNavigate: (page: string) => void; backendStatus: s
             const Icon = service.icon as any;
             const delayClass = index === 0 ? "fade-up-delay-1" : index === 1 ? "fade-up-delay-2" : "fade-up-delay-3";
             return (
-              <button 
-                key={service.id} 
-                onClick={() => onNavigate(service.id)} 
-                className={`liquidGlass-wrapper liquidGlass-card text-center ${delayClass} flex flex-col h-full`}
-              >
-                <div className="liquidGlass-effect" />
-                <div className="liquidGlass-tint" />
-                <div className="liquidGlass-shine" />
-                <div className="liquidGlass-content flex flex-col items-center w-full h-full">
-                  <div className="flex-1 flex flex-col items-center justify-start w-full">
-                    <div className="flex justify-center mb-8">
-                      <div className={`card-icon w-24 h-24 bg-gradient-to-br ${service.color} rounded-2xl flex items-center justify-center shadow-xl`}>
-                        <Icon className="w-12 h-12 text-white" />
-                      </div>
+
+            // butonul mare cu efect de sticlă
+            <button 
+              key={service.id} 
+              onClick={() => onNavigate(service.id)} 
+              className={`liquidGlass-wrapper liquidGlass-card text-center ${delayClass} flex flex-col h-full`}
+            >
+              <div className="liquidGlass-effect" />
+              <div className="liquidGlass-tint" />
+              <div className="liquidGlass-shine" />
+              <div className="liquidGlass-content flex flex-col items-center w-full h-full">
+                <div className="flex-1 flex flex-col items-center justify-start w-full">
+                  <div className="flex justify-center mb-8">
+                    <div className={`card-icon w-24 h-24 bg-gradient-to-br ${service.color} rounded-2xl flex items-center justify-center shadow-xl`}>
+                      <Icon className="w-12 h-12 text-white" />
                     </div>
-                    <h3 className="text-2xl font-bold text-gray-800 mb-4">{service.title}</h3>
-                    <p className="text-gray-600 mb-4 leading-relaxed">{service.description}</p>
-                    <p className="text-xs text-gray-400 mb-6 font-mono">Endpoint: {service.endpoint}</p>
                   </div>
-                  <div className={`w-full bg-gradient-to-r ${service.color} ${service.hoverColor} text-white py-3 rounded-xl font-semibold shadow-lg transition-all duration-300`}>
-                    Selectează Serviciul
-                  </div>
+                  <h3 className="text-2xl font-bold text-gray-800 mb-4">{service.title}</h3>
+                  <p className="text-gray-600 mb-4 leading-relaxed">{service.description}</p>
+                  <p className="text-xs text-gray-400 mb-6 font-mono">Endpoint: {service.endpoint}</p>
                 </div>
-              </button>
+              
+                {/* Buton Glass Blue */}
+                <div className="button-wrap button-wrap-blue w-full">
+                  <div className="button-shadow"></div>
+                  <button 
+                    type="button"
+                    className="glass-btn-blue w-full"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onNavigate(service.id);
+                    }}
+                  >
+                    <span>Selectează Serviciul</span>
+                  </button>
+                </div>
+              </div>
+            </button>
             );
           })}
         </div>
@@ -502,31 +344,51 @@ const GlassSelect: React.FC<{
   options: { value: string; label: string }[];
   label: string;
 }> = ({ value, onChange, options, label }) => {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = React.useState(false);
+  const [isClosing, setIsClosing] = React.useState(false);
   const dropdownRef = React.useRef<HTMLDivElement>(null);
-  const selectedOption = options.find(opt => opt.value === value);
+  const selectedOption = options.find((opt) => opt.value === value);
 
-  // Close on click outside
+const startClose = React.useCallback(() => {
+  setIsClosing(true);
+  // asigurăm un reflow înainte să schimbăm clasa în `dropdown-exit`
+  requestAnimationFrame(() => setIsOpen(false));
+}, []);
+
+  // click în afara
   React.useEffect(() => {
     if (!isOpen) return;
-    
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
+        startClose();
       }
     };
-    
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isOpen]);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isOpen, startClose]);
+
+  // ESC pentru a închide
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") startClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [isOpen, startClose]);
 
   return (
     <div className="relative" ref={dropdownRef}>
       <label className="block text-gray-700 font-medium mb-2">{label}</label>
-      <div 
-        className="liquidGlass-wrapper rounded-2xl cursor-pointer" 
-        style={{padding: '0'}} 
-        onClick={() => setIsOpen(!isOpen)}
+
+      <button
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        onClick={() => (isOpen ? startClose() : setIsOpen(true))}
+
+        className="liquidGlass-wrapper rounded-2xl cursor-pointer w-full"
+        style={{ padding: 0 }}
       >
         <div className="liquidGlass-effect" />
         <div className="liquidGlass-tint" />
@@ -534,46 +396,65 @@ const GlassSelect: React.FC<{
         <div className="liquidGlass-content w-full">
           <div className="px-4 py-3 flex items-center justify-between font-medium text-gray-800">
             <span>{selectedOption?.label}</span>
-            <svg className={`w-4 h-4 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} viewBox="0 0 16 16">
-              <path d="M8 11L3 6h10z" fill="#3b82f6"/>
+            <svg
+              className={`w-4 h-4 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+              viewBox="0 0 16 16"
+              aria-hidden="true"
+            >
+              <path d="M8 11L3 6h10z" fill="#3b82f6" />
             </svg>
           </div>
         </div>
-      </div>
-      
+      </button>
 
-      {isOpen && (
-        <div 
-          className="absolute left-0 right-0 mt-2 z-50 liquidGlass-wrapper rounded-2xl shadow-2xl" 
-          style={{padding: '0.5rem', maxHeight: '240px', overflow: 'hidden'}}
+      {(isOpen || isClosing) && (
+        <div
+          className={`absolute left-0 right-0 mt-2 z-50 liquidGlass-wrapper rounded-2xl shadow-2xl ${
+            isOpen ? "dropdown-enter" : "dropdown-exit"
+          }`}
+          style={{ padding: "0.5rem", maxHeight: "240px", overflow: "hidden" }}
+          onAnimationEnd={(e) => {
+            if (!isOpen && isClosing && e.animationName === "dropdownSlideUp") {
+              setIsClosing(false);   // dezmontăm doar DUPĂ ce se termină animația de urcare
+            }
+          }}
+          role="listbox"
+          aria-label={label}
         >
           <div className="liquidGlass-effect" />
           <div className="liquidGlass-tint" />
           <div className="liquidGlass-shine" />
-          <div className="liquidGlass-content h-full overflow-y-auto space-y-1" style={{maxHeight: '230px'}}>
-            {options.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => {
-                  onChange(option.value);
-                  setIsOpen(false);
-                }}
-                className={`w-full px-4 py-3 text-left rounded-xl transition-all duration-200 font-medium ${
-                  option.value === value
-                    ? 'bg-gradient-to-r from-blue-500 to-sky-500 text-white shadow-lg'
-                    : 'hover:bg-blue-50/80 text-gray-800'
-                }`}
-              >
-                {option.label}
-              </button>
-            ))}
+          <div className="liquidGlass-content h-full overflow-y-auto space-y-1" style={{ maxHeight: "230px" }}>
+            {options.map((option) => {
+              const active = option.value === value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  role="option"
+                  aria-selected={active}
+                  onClick={() => {
+                    onChange(option.value);
+                    startClose();
+                  }}
+                  className={`w-full px-4 py-3 text-left rounded-xl transition-all duration-200 font-medium ${
+                    active
+                      ? "bg-gradient-to-r from-blue-500 to-sky-500 text-white shadow-lg"
+                      : "hover:bg-blue-50/80 text-gray-800"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
     </div>
   );
 };
+
+
 // ================= Pagini =================
 const SummaryPage: React.FC<{ backendStatus: string }> = ({ backendStatus }) => {
 
@@ -584,12 +465,20 @@ const SummaryPage: React.FC<{ backendStatus: string }> = ({ backendStatus }) => 
   const [destLang, setDestLang] = useState<Lang>("ro");
   const [detailLevel, setDetailLevel] = useState<number>(50);
   const [youtubeLink, setYoutubeLink] = useState<string>("");
+
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [canSubmit, setCanSubmit] = useState(false);
 
-  // ✅ FUNCȚIILE AICI
-  const removeFile = (fileId: string) => setFiles((prev) => prev.filter((f) => f.id !== fileId));
+  // Verifică dacă se poate trimite (fie fișiere, fie link YouTube)
+  useEffect(() => {
+    const hasFiles = selectedFiles.length > 0;
+    const hasYoutubeLink = youtubeLink.trim().length > 0;
+    setCanSubmit(hasFiles || hasYoutubeLink);
+  }, [selectedFiles, youtubeLink]);
 
+  
+  //  FUNCȚIILE AICI
+  const removeFile = (fileId: string) => setFiles((prev) => prev.filter((f) => f.id !== fileId));
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const uploadedFiles = Array.from(e.target.files || []);
     if (uploadedFiles.length === 0) return;
@@ -600,61 +489,85 @@ const SummaryPage: React.FC<{ backendStatus: string }> = ({ backendStatus }) => 
     console.log(`${uploadedFiles.length} fișiere selectate:`, uploadedFiles.map(f => f.name));
   };
 
-  const handleSubmit = async () => {
-    if (selectedFiles.length === 0 || isProcessing) return;
-    
-    setIsProcessing(true);
-    setCanSubmit(false);
-    
-    const newFiles: ProcessedFile[] = selectedFiles.map((file) => ({ 
-      id: Math.random().toString(36).substr(2, 9), 
-      name: file.name, 
-      type: file.type, 
-      status: "pending", 
-      progress: 0 
-    }));
-    
-    setFiles((prev) => [...prev, ...newFiles]);
+  // FUNCȚIA TRIMITE (unificată pentru link + fișiere)
+const handleSubmit = async () => {
+  const isValidYouTube = (s: string) =>
+    /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\//i.test((s || '').trim());
 
-    for (const [index, file] of selectedFiles.entries()) {
-      const fileId = newFiles[index].id;
-      try {
-        setFiles((prev) => prev.map((f) => (f.id === fileId ? { ...f, status: "processing", progress: 15 } : f)));
+  if (isProcessing) return;
 
-        let result: any;
-        if (backendStatus === "online") {
-          result = await realApi.summarizeOrTranslateDoc(file, mode, srcLang, destLang, detailLevel, youtubeLink);
-        } else {
-          if (mode === "summary") {
-            const fd = new FormData();
-            fd.append("file", file);
-            fd.append("service", "summarize");
-            fd.append("src_lang", srcLang);
-            fd.append("dest_lang", destLang);
-            fd.append("detail_level", detailLevel.toString());
-            fd.append("youtube_link", youtubeLink);
-            result = await mockApi.summarize(fd);
-          } else {
-            const fd = new FormData();
-            fd.append("file", file);
-            fd.append("service", "translation");
-            fd.append("src_lang", srcLang);
-            fd.append("dest_lang", destLang);
-            fd.append("detail_level", detailLevel.toString());
-  fd.append("youtube_link", youtubeLink);
-            result = await mockApi.translateDoc(fd);
-          }
-        }
-        setFiles((prev) => prev.map((f) => (f.id === fileId ? { ...f, status: "completed", progress: 100, result, downloadUrl: (result && (result.downloadUrl || result.file_path)) || undefined } : f)));
-      } catch (error: any) {
-        setFiles((prev) => prev.map((f) => (f.id === fileId ? { ...f, status: "error", progress: 0, error: error.message || "Processing failed" } : f)));
+  const hasFiles = selectedFiles.length > 0;
+  const hasValidLink = isValidYouTube(youtubeLink);
+
+  // dacă nu există nici fișiere, nici link valid => stop
+  if (!hasFiles && !hasValidLink) return;
+
+  // dacă sunt ambele selectate simultan => avertizare și stop, implementeaza avertizare mai frumoasa
+  if (hasFiles && hasValidLink) {
+    alert("⚠️ Poți trimite fie un fișier, fie un link YouTube — nu ambele simultan.");
+    return;
+  }
+  setIsProcessing(true);
+  setCanSubmit(false);
+
+  try {
+    // pregătim un formdata comun
+    const fd = new FormData();
+    fd.append("service", mode === "translation" ? "translation" : "summarize");
+    fd.append("src_lang", srcLang);
+    fd.append("dest_lang", destLang);
+    fd.append("detail_level", String(detailLevel));
+    if (hasValidLink) fd.append("youtube_link", youtubeLink.trim());
+    if (hasFiles) {
+      selectedFiles.forEach((file) => fd.append("file", file));
+    }
+
+    let result: any;
+
+    // apelăm API-ul real sau mock
+    if (backendStatus === "online") {
+      result = await realApi.summarizeOrTranslateDoc(
+        selectedFiles[0] || new File([], "empty.txt"),
+        mode,
+        srcLang,
+        destLang,
+        detailLevel,
+        hasValidLink ? youtubeLink.trim() : ""
+      );
+    } else {
+      if (mode === "summary") {
+        result = await mockApi.summarize(fd);
+      } else {
+        result = await mockApi.translateDoc(fd);
       }
     }
 
-    setIsProcessing(false);
-    setSelectedFiles([]);
-  };
+    // construim un „file entry” generic pentru UI
+    const pseudoId = Math.random().toString(36).substr(2, 9);
+    const displayName =
+      hasFiles && selectedFiles.length > 0
+        ? selectedFiles[0].name
+        : youtubeLink.trim();
+    const pseudoFile: ProcessedFile = {
+      id: pseudoId,
+      name: displayName,
+      type: hasFiles ? selectedFiles[0].type : "text/uri-list",
+      status: "completed",
+      progress: 100,
+      result,
+      downloadUrl: result?.downloadUrl || result?.file_path,
+    };
 
+    setFiles((prev) => [...prev, pseudoFile]);
+    setSelectedFiles([]);
+  } catch (e: any) {
+    console.error(e);
+  } finally {
+    setIsProcessing(false);
+  }
+};
+
+  // BUTON ANULEAZĂ
   const handleCancel = () => {
     setSelectedFiles([]);
     setCanSubmit(false);
@@ -667,7 +580,7 @@ const SummaryPage: React.FC<{ backendStatus: string }> = ({ backendStatus }) => 
   return (
     
     <div className="container mx-auto px-4 py-8 max-w-4xl">
-      <div className="liquidGlass-wrapper rounded-3xl mb-6 shadow-lg fade-up" style={{padding: '1.5rem'}}>
+      <div className="liquidGlass-wrapper liquidGlass-card fade-up-delay-3 rounded-3xl mb-6 shadow-lg " style={{padding: '1.5rem'}}>
         <div className="liquidGlass-effect" />
         <div className="liquidGlass-tint" />
         <div className="liquidGlass-shine" />
@@ -681,7 +594,7 @@ const SummaryPage: React.FC<{ backendStatus: string }> = ({ backendStatus }) => 
         </div>
       </div>
 
-      <div className="liquidGlass-wrapper rounded-3xl mb-6 shadow-lg fade-up-delay-1" style={{padding: '1.5rem'}}>
+      <div className="liquidGlass-wrapper liquidGlass-card rounded-3xl mb-6 shadow-lg fade-up-delay-1" style={{padding: '1.5rem'}}>
         <div className="liquidGlass-effect" />
         <div className="liquidGlass-tint" />
         <div className="liquidGlass-shine" />
@@ -749,8 +662,8 @@ const SummaryPage: React.FC<{ backendStatus: string }> = ({ backendStatus }) => 
         </div>
       </div>
 
-      {/* ✅ BLOC NOU CU BUTOANE */}
-      <div className="liquidGlass-wrapper rounded-3xl mb-6 shadow-lg fade-up-delay-2" style={{padding: '2rem'}}>
+      {/*Box incarcare docs */}
+      <div className="liquidGlass-wrapper liquidGlass-card rounded-3xl mb-6 shadow-lg fade-up-delay-2" style={{padding: '2rem'}}>
         <div className="liquidGlass-effect" />
         <div className="liquidGlass-tint" />
         <div className="liquidGlass-shine" />
@@ -792,34 +705,8 @@ const SummaryPage: React.FC<{ backendStatus: string }> = ({ backendStatus }) => 
         </div>
       </div>
 
-      {/* BUTOANE TRIMITE / ANULEAZĂ */}
-      {canSubmit && !isProcessing && (
-        <div className="liquidGlass-wrapper rounded-2xl mb-6 shadow-lg fade-up" style={{padding: '1rem'}}>
-          <div className="liquidGlass-effect" />
-          <div className="liquidGlass-tint" />
-          <div className="liquidGlass-shine" />
-          <div className="liquidGlass-content flex gap-4">
-            <button
-              onClick={handleSubmit}
-              disabled={isProcessing}
-              className="flex-1 px-6 py-4 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              <CheckCircle className="w-5 h-5" />
-              Trimite Fișierele ({selectedFiles.length})
-            </button>
-            
-            <button
-              onClick={handleCancel}
-              disabled={isProcessing}
-              className="flex-1 px-6 py-4 bg-gradient-to-r from-red-500 to-rose-500 hover:from-red-600 hover:to-rose-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              <X className="w-5 h-5" />
-              Anulează
-            </button>
-          </div>
-        </div>
-      )}
-      <div className="liquidGlass-wrapper rounded-2xl mb-5 shadow-md fade-up-delay-3" style={{padding: '1rem'}}>
+            {/* INPUT LINK YOUTUBE */}
+      <div className="liquidGlass-wrapper liquidGlass-card rounded-2xl mb-5 shadow-md fade-up-delay-3" style={{padding: '1rem'}}>
         <div className="liquidGlass-effect" />
         <div className="liquidGlass-tint" />
         <div className="liquidGlass-shine" />
@@ -830,6 +717,53 @@ const SummaryPage: React.FC<{ backendStatus: string }> = ({ backendStatus }) => 
         </div>
       </div>
 
+      {/* BUTOANE TRIMITE / ANULEAZĂ */}
+      {canSubmit && !isProcessing && (
+        <div className="liquidGlass-wrapper liquidGlass-card rounded-2xl mb-6 shadow-lg fade-up" style={{padding: '1rem'}}>
+          <div className="liquidGlass-effect" />
+          <div className="liquidGlass-tint" />
+          <div className="liquidGlass-shine" />
+          <div className="liquidGlass-content flex gap-4">
+            {/* Buton Trimite - Glass Green */}
+            <div className="button-wrap button-wrap-green flex-1">
+              <div className="button-shadow"></div>
+              <button 
+                onClick={handleSubmit} 
+                disabled={isProcessing} 
+                className="glass-btn-green w-full"
+              >
+              <span className="flex items-center justify-center gap-2">
+                <CheckCircle className="w-5 h-5" />
+                {(() => {
+                  const hasFiles = selectedFiles.length > 0;
+                  const hasLink = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\//i.test((youtubeLink || '').trim());
+                  if (hasFiles && hasLink) return '⚠️ Alege doar fișier sau doar Link YouTube';
+                  if (hasFiles) return 'Trimite fișier';
+                  if (hasLink) return 'Trimite Link YouTube';
+                  return 'Adaugă fișier sau Link YouTube';
+                })()}
+              </span>
+
+              </button>
+            </div>
+            
+            {/* Buton Anulează - Glass Red */}
+            <div className="button-wrap button-wrap-red flex-1">
+              <div className="button-shadow"></div>
+              <button
+                onClick={handleCancel}
+                disabled={isProcessing}
+                className="glass-btn-red w-full"
+              >
+                <span className="flex items-center justify-center gap-2">
+                  <X className="w-5 h-5" />
+                  Anulează
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {isProcessing && (
         <div className="liquidGlass-wrapper rounded-3xl mb-6 shadow-lg fade-up" style={{padding: '1.5rem'}}>
           <div className="liquidGlass-effect" />
