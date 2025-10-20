@@ -1,16 +1,16 @@
-1
+﻿1
 00:00:00,000 --> 00:00:02,560
-aggressive behaviour in traffic may be reported,
+Can aggressive traffic behaviors be reported?
 
 2
-00:00:02,600 --> 00:00:04,419
-The cops only gave a thousand sanctions.
+00:00:02,560 --> 00:00:04,419
+Police officers gave only one thousand sanctions.
 
 3
-00:00:04,500 --> 00:00:07,559
-It's about drivers who were surprised on public roads.
+00:00:04,480 --> 00:00:07,559
+It's about drivers who were surprised on public roads
 
 4
-00:00:07,559 --> 00:00:10,960
-and canning others with creeps, horns or reckless maneuvers.
+00:00:07,559 --> 00:00:10,939
+And leaving the others with fleas, claws or reckless maneuvers.
 

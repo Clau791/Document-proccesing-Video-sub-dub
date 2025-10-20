@@ -834,24 +834,78 @@ const handleSubmit = async () => {
 const SubtitlesPage: React.FC<{ backendStatus: string }> = ({ backendStatus }) => {
   const [files, setFiles] = useState<ProcessedFile[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [srcLangSub, setSrcLangSub] = useState <Lang>("en");
+  const [srcLangSub, setSrcLangSub] = useState<Lang>("en");
   const [destLangSub, setDestLangSub] = useState<Lang>("ro");
+  
+  // NOUĂ: State pentru opțiuni LLM
+  const [useLLMValidation, setUseLLMValidation] = useState(true);
+  const [useDoubleValidation, setUseDoubleValidation] = useState(false);
+  const [llmStatus, setLLMStatus] = useState<'checking' | 'online' | 'offline'>('checking');
 
-  const pollStatus = async (jobId: string): Promise<JobStatus> => mockApi.getStatus(jobId);
+  // NOUĂ: Verificare status LLM la mount
+  useEffect(() => {
+    checkLLMStatus();
+  }, []);
+
+  const checkLLMStatus = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/llm-status`);
+      if (response.ok) {
+        const data = await response.json();
+        setLLMStatus(data.status === 'online' ? 'online' : 'offline');
+      } else {
+        setLLMStatus('offline');
+      }
+    } catch {
+      setLLMStatus('offline');
+    }
+  };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const uploadedFiles = Array.from(e.target.files || []); if (uploadedFiles.length === 0) return;
-    const newFiles: ProcessedFile[] = uploadedFiles.map((file) => ({ id: Math.random().toString(36).substr(2, 9), name: file.name, type: file.type, status: "pending", progress: 0 }));
-    setFiles((prev) => [...prev, ...newFiles]); setIsProcessing(true);
+    const uploadedFiles = Array.from(e.target.files || []); 
+    if (uploadedFiles.length === 0) return;
+    
+    const newFiles: ProcessedFile[] = uploadedFiles.map((file) => ({ 
+      id: Math.random().toString(36).substr(2, 9), 
+      name: file.name, 
+      type: file.type, 
+      status: "pending", 
+      progress: 0 
+    }));
+    
+    setFiles((prev) => [...prev, ...newFiles]); 
+    setIsProcessing(true);
 
     for (const [index, file] of uploadedFiles.entries()) {
       const fileId = newFiles[index].id;
       try {
-        setFiles((prev) => prev.map((f) => (f.id === fileId ? { ...f, status: "processing", progress: 20 } : f)));
+        setFiles((prev) => prev.map((f) => 
+          (f.id === fileId ? { ...f, status: "processing", progress: 20 } : f)
+        ));
+        
         let response: any;
         if (backendStatus === "online") {
-          response = await realApi.createSubtitles(file, srcLangSub, destLangSub);
+          // MODIFICAT: Trimite parametrii LLM
+          const formData = new FormData();
+          formData.append("file", file);
+          formData.append("service", "video-subtitle");
+          formData.append("src_lang", srcLangSub);
+          formData.append("dest_lang", destLangSub);
+          formData.append("use_llm", String(useLLMValidation));
+          formData.append("double_validation", String(useDoubleValidation));
+          
+          const apiResponse = await fetch(`${API_BASE_URL}/subtitles`, {
+            method: "POST",
+            body: formData
+          });
+          
+          if (!apiResponse.ok) {
+            throw new Error("Processing failed");
+          }
+          
+          response = await apiResponse.json();
         } else {
+          // Mock pentru demo
           const fd = new FormData();
           fd.append("file", file);
           fd.append("service", "subtitles");
@@ -860,118 +914,300 @@ const SubtitlesPage: React.FC<{ backendStatus: string }> = ({ backendStatus }) =
           response = await mockApi.subtitles(fd);
         }
 
-        if (response.jobId) {
-          setFiles((prev) => prev.map((f) => (f.id === fileId ? { ...f, progress: 50 } : f)));
-          const status = await pollStatus(response.jobId);
-          setFiles((prev) => prev.map((f) => (f.id === fileId ? { ...f, status: "completed", progress: 100, result: { jobId: response.jobId, ...status }, downloadUrl: status.resultUrl } : f)));
-        } else {
-          setFiles((prev) => prev.map((f) => (f.id === fileId ? { ...f, status: "completed", progress: 100, result: response, downloadUrl: response?.downloadUrl || response?.file_path } : f)));
-        }
+        // Update cu informații despre validare
+        setFiles((prev) => prev.map((f) => 
+          (f.id === fileId ? { 
+            ...f, 
+            status: "completed", 
+            progress: 100, 
+            result: {
+              ...response,
+              llmValidated: response.llmValidated || false,
+              doubleValidated: response.doubleValidated || false,
+              preview: response.preview || []
+            }, 
+            downloadUrl: response.downloadUrl 
+          } : f)
+        ));
       } catch (error: any) {
-        setFiles((prev) => prev.map((f) => (f.id === fileId ? { ...f, status: "error", progress: 0, error: error.message || "Processing failed" } : f)));
+        setFiles((prev) => prev.map((f) => 
+          (f.id === fileId ? { 
+            ...f, 
+            status: "error", 
+            progress: 0, 
+            error: error.message || "Processing failed" 
+          } : f)
+        ));
       }
     }
 
-    setIsProcessing(false); e.target.value = "";
+    setIsProcessing(false); 
+    e.target.value = "";
   };
 
   const removeFile = (fileId: string) => setFiles((prev) => prev.filter((f) => f.id !== fileId));
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
-      <div className="bg-white/80 backdrop-blur-sm border border-white/60 rounded-3xl p-6 mb-6 shadow-lg fade-up">
-        <div className="flex items-start gap-4">
-          <div className="bg-gradient-to-br from-blue-400 to-sky-400 w-16 h-16 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg"><Subtitles className="w-8 h-8 text-white" /></div>
+      {/* Header cu informații despre subtitrare */}
+      <div className="liquidGlass-wrapper liquidGlass-card rounded-3xl mb-6 shadow-lg fade-up" style={{padding: '1.5rem'}}>
+        <div className="liquidGlass-effect" />
+        <div className="liquidGlass-tint" />
+        <div className="liquidGlass-shine" />
+        <div className="liquidGlass-content flex items-start gap-4">
+          <div className="bg-gradient-to-br from-blue-400 to-sky-400 w-16 h-16 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg">
+            <Subtitles className="w-8 h-8 text-white" />
+          </div>
           <div className="flex-1">
-            <h2 className="text-2xl font-bold text-gray-800 mb-2">Subtitrare Video</h2>
-            <p className="text-gray-600 mb-2">Selectează limba sursă și țintă (RO) și încarcă fișierul video</p>
-            <p className="text-xs text-gray-400 font-mono">Backend Endpoint: POST /api/subtitles</p>
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">Subtitrare Video Inteligentă</h2>
+            <p className="text-gray-600 mb-2">Transcriere și traducere cu validare AI avansată</p>
+            
+            {/* NOUĂ: Status LLM */}
+            <div className="flex items-center gap-4 mt-3">
+              <div className={`flex items-center gap-2 px-3 py-1 rounded-lg ${
+                llmStatus === 'online' ? 'bg-green-100 text-green-700' : 
+                llmStatus === 'offline' ? 'bg-red-100 text-red-700' : 
+                'bg-yellow-100 text-yellow-700'
+              }`}>
+                <div className={`w-2 h-2 rounded-full ${
+                  llmStatus === 'online' ? 'bg-green-500 animate-pulse' : 
+                  llmStatus === 'offline' ? 'bg-red-500' : 
+                  'bg-yellow-500 animate-pulse'
+                }`} />
+                <span className="text-xs font-medium">
+                  Validare LLM: {
+                    llmStatus === 'online' ? 'Disponibilă' : 
+                    llmStatus === 'offline' ? 'Indisponibilă' : 
+                    'Verificare...'
+                  }
+                </span>
+              </div>
+              <p className="text-xs text-gray-400 font-mono">Endpoint: /api/subtitles</p>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="bg-white/80 backdrop-blur-sm border border-white/60 rounded-2xl p-6 mb-6 shadow-lg grid md:grid-cols-2 gap-6 fade-up-delay-1">
-        <div>
-          <label className="block text-gray-700 font-medium mb-2">Limba sursă</label>
-          <select value={srcLangSub} onChange={(e)=>setSrcLangSub(e.target.value as Lang)} className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-white">
-            <option value="ro">{LANG_LABEL.ro}</option>
-            <option value="en">{LANG_LABEL.en}</option>
-            <option value="zh">{LANG_LABEL.zh}</option>
-            <option value="ru">{LANG_LABEL.ru}</option>
-            <option value="ja">{LANG_LABEL.ja}</option>
-          </select>
-        </div>
-        <div>
-          <label className="block text-gray-700 font-medium mb-2">Limba țintă</label>
-          <select value={destLangSub} onChange={(e)=>setDestLangSub(e.target.value as Lang)} className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-white">
-            <option value="ro">{LANG_LABEL.ro}</option>
-            <option value="en">{LANG_LABEL.en}</option>
-            <option value="zh">{LANG_LABEL.zh}</option>
-            <option value="ru">{LANG_LABEL.ru}</option>
-            <option value="ja">{LANG_LABEL.ja}</option>
-          </select>
+      {/* Setări limbi */}
+      <div className="liquidGlass-wrapper liquidGlass-card rounded-3xl mb-6 shadow-lg grid md:grid-cols-2 gap-6 fade-up-delay-1" style={{padding: '1.5rem'}}>
+        <div className="liquidGlass-effect" />
+        <div className="liquidGlass-tint" />
+        <div className="liquidGlass-shine" />
+        <div className="liquidGlass-content grid md:grid-cols-2 gap-6 w-full">
+          <GlassSelect
+            label="Limba sursă (auto-detectare disponibilă)"
+            value={srcLangSub}
+            onChange={(val) => setSrcLangSub(val as Lang)}
+            options={[
+              { value: "auto", label: "🔍 Auto-detectare" },
+              { value: "ro", label: "🇷🇴 Română (RO)" },
+              { value: "en", label: "🇬🇧 Engleză (EN)" },
+              { value: "zh", label: "🇨🇳 Chineză (ZH)" },
+              { value: "ru", label: "🇷🇺 Rusă (RU)" },
+              { value: "ja", label: "🇯🇵 Japoneză (JA)" }
+            ]}
+          />
+          
+          <GlassSelect
+            label="Limba țintă"
+            value={destLangSub}
+            onChange={(val) => setDestLangSub(val as Lang)}
+            options={[
+              { value: "ro", label: "🇷🇴 Română (RO)" },
+              { value: "en", label: "🇬🇧 Engleză (EN)" },
+              { value: "zh", label: "🇨🇳 Chineză (ZH)" },
+              { value: "ru", label: "🇷🇺 Rusă (RU)" },
+              { value: "ja", label: "🇯🇵 Japoneză (JA)" }
+            ]}
+          />
         </div>
       </div>
 
-      <div className="bg-white/80 backdrop-blur-sm border border-white/60 rounded-3xl p-8 mb-6 shadow-lg fade-up-delay-2">
-        <div className="border-2 border-dashed border-gray-300 rounded-xl p-12 text-center hover:border-blue-400 hover:bg-blue-50/50 transition-all">
-          <Upload className="w-16 h-16 mx-auto text-gray-400 mb-4" />
-          <label className="cursor-pointer">
-            <span className="text-xl font-semibold text-gray-800 block mb-2">Încarcă Video</span>
-            <span className="text-gray-500 text-sm block mb-4">Formate acceptate: MP4, WebM, AVI, MOV</span>
-            <input type="file" accept="video/mp4,video/webm,video/avi,video/quicktime" multiple onChange={handleFileUpload} className="hidden" disabled={isProcessing} />
-            <span className={`inline-block px-6 py-3 bg-gradient-to-r from-blue-500 to-sky-500 text-white rounded-xl font-semibold transition-all shadow-md ${isProcessing ? "opacity-50 cursor-not-allowed" : "hover:from-blue-600 hover:to-sky-600 hover:shadow-lg"}`}>{isProcessing ? "Procesare..." : "Selectează Video"}</span>
-          </label>
-        </div>
-      </div>
-
-      {files.length > 0 && (
-        <div className="bg-white/80 backdrop-blur-sm border border-white/60 rounded-3xl p-6 shadow-lg fade-up-delay-3">
-          <h3 className="text-xl font-bold text-gray-800 mb-4">Videoclipuri Procesate ({files.length})</h3>
-          <div className="space-y-4">
-            {files.map((file) => (
-              <div key={file.id} className="bg-gradient-to-r from-gray-50 to-gray-100 border border-gray-200 rounded-xl p-4 shadow-sm">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                    {file.status === "completed" && <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />}
-                    {file.status === "processing" && <Loader className="w-5 h-5 text-blue-500 animate-spin flex-shrink-0" />}
-                    {file.status === "error" && <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />}
-                    <span className="text-gray-800 font-medium truncate">{file.name}</span>
-                  </div>
-                  <button onClick={() => removeFile(file.id)} className="p-1 hover:bg-gray-200 rounded transition-colors"><X className="w-4 h-4 text-gray-500" /></button>
+      {/* NOUĂ: Opțiuni validare LLM */}
+      {llmStatus === 'online' && (
+        <div className="liquidGlass-wrapper liquidGlass-card rounded-3xl mb-6 shadow-lg fade-up-delay-2" style={{padding: '1.5rem'}}>
+          <div className="liquidGlass-effect" />
+          <div className="liquidGlass-tint" />
+          <div className="liquidGlass-shine" />
+          <div className="liquidGlass-content">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">🤖 Opțiuni Validare AI</h3>
+            
+            <div className="space-y-3">
+              <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg hover:bg-blue-50/50 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={useLLMValidation}
+                  onChange={(e) => setUseLLMValidation(e.target.checked)}
+                  className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <div>
+                  <div className="font-medium text-gray-800">Validare cu LLM (Gemma3 27B)</div>
+                  <div className="text-sm text-gray-600">Îmbunătățește calitatea traducerilor folosind AI avansat</div>
                 </div>
-                {file.status === "processing" && (
-                  <div className="mb-3">
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div className="bg-gradient-to-r from-blue-500 to-sky-500 h-2 rounded-full transition-all duration-500" style={{ width: `${file.progress}%` }} />
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">{file.progress}% completat</p>
+              </label>
+              
+              {useLLMValidation && (
+                <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg hover:bg-blue-50/50 transition-colors ml-8">
+                  <input
+                    type="checkbox"
+                    checked={useDoubleValidation}
+                    onChange={(e) => setUseDoubleValidation(e.target.checked)}
+                    className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <div>
+                    <div className="font-medium text-gray-800">Validare dublă (Gemma3 + Mistral)</div>
+                    <div className="text-sm text-gray-600">Verificare încrucișată pentru acuratețe maximă</div>
                   </div>
-                )}
-                {file.status === "completed" && file.result && (
-                  <div className="mt-4 space-y-3">
-                    <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                      <h4 className="text-sm font-semibold text-gray-800 mb-2">✅ Subtitrare completă!</h4>
-                      <p className="text-sm text-gray-700 mb-3">Job ID: {file.result.jobId || "demo"}</p>
-                      {file.downloadUrl && (
-                        <a href={file.downloadUrl} download className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-sky-500 text-white rounded-lg hover:from-blue-600 hover:to-sky-600 transition-all shadow-md text-sm font-medium">
-                          <Download className="w-4 h-4" /> Descarcă Subtitrare
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                )}
-                {file.status === "error" && (
-                  <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg"><p className="text-sm text-red-600">{file.error}</p></div>
-                )}
+                </label>
+              )}
+            </div>
+            
+            {useLLMValidation && (
+              <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-700">
+                  ℹ️ Validarea LLM poate crește timpul de procesare cu ~30-50%, dar îmbunătățește 
+                  semnificativ calitatea traducerilor, în special pentru limbi asiatice.
+                </p>
               </div>
-            ))}
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Upload video */}
+      <div className="liquidGlass-wrapper liquidGlass-card rounded-3xl mb-6 shadow-lg fade-up-delay-3" style={{padding: '2rem'}}>
+        <div className="liquidGlass-effect" />
+        <div className="liquidGlass-tint" />
+        <div className="liquidGlass-shine" />
+        <div className="liquidGlass-content">
+          <div className="border-2 border-dashed border-gray-300 rounded-xl p-12 text-center hover:border-blue-400 hover:bg-blue-50/50 transition-all">
+            <Upload className="w-16 h-16 mx-auto text-gray-400 mb-4" />
+            <label className="cursor-pointer">
+              <span className="text-xl font-semibold text-gray-800 block mb-2">Încarcă Video</span>
+              <span className="text-gray-500 text-sm block mb-4">Formate acceptate: MP4, WebM, AVI, MOV</span>
+              <input 
+                type="file" 
+                accept="video/mp4,video/webm,video/avi,video/quicktime" 
+                multiple 
+                onChange={handleFileUpload} 
+                className="hidden" 
+                disabled={isProcessing} 
+              />
+              <span className={`inline-block px-6 py-3 bg-gradient-to-r from-blue-500 to-sky-500 text-white rounded-xl font-semibold transition-all shadow-md ${
+                isProcessing ? "opacity-50 cursor-not-allowed" : "hover:from-blue-600 hover:to-sky-600 hover:shadow-lg"
+              }`}>
+                {isProcessing ? "Procesare..." : "Selectează Video"}
+              </span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      {/* Lista fișierelor procesate - MODIFICAT pentru a afișa info despre validare */}
+      {files.length > 0 && (
+        <div className="liquidGlass-wrapper liquidGlass-card rounded-3xl shadow-lg fade-up" style={{padding: '1.5rem'}}>
+          <div className="liquidGlass-effect" />
+          <div className="liquidGlass-tint" />
+          <div className="liquidGlass-shine" />
+          <div className="liquidGlass-content">
+            <h3 className="text-xl font-bold text-gray-800 mb-4">Videoclipuri Procesate ({files.length})</h3>
+            <div className="space-y-4">
+              {files.map((file) => (
+                <div key={file.id} className="liquidGlass-wrapper rounded-xl shadow-sm" style={{padding: '1rem'}}>
+                  <div className="liquidGlass-effect" />
+                  <div className="liquidGlass-tint" />
+                  <div className="liquidGlass-shine" />
+                  <div className="liquidGlass-content">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        {file.status === "completed" && <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />}
+                        {file.status === "processing" && <Loader className="w-5 h-5 text-blue-500 animate-spin flex-shrink-0" />}
+                        {file.status === "error" && <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />}
+                        <span className="text-gray-800 font-medium truncate">{file.name}</span>
+                      </div>
+                      <button onClick={() => removeFile(file.id)} className="p-1 hover:bg-gray-200 rounded transition-colors">
+                        <X className="w-4 h-4 text-gray-500" />
+                      </button>
+                    </div>
+                    
+                    {file.status === "processing" && (
+                      <div className="mb-3">
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div className="bg-gradient-to-r from-blue-500 to-sky-500 h-2 rounded-full transition-all duration-500" 
+                            style={{ width: `${file.progress}%` }} />
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">{file.progress}% completat</p>
+                      </div>
+                    )}
+                    
+                    {file.status === "completed" && file.result && (
+                      <div className="mt-4 space-y-3">
+                        <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                          <h4 className="text-sm font-semibold text-gray-800 mb-2">✅ Subtitrare completă!</h4>
+                          
+                          {/* Info despre validare */}
+                          {file.result.llmValidated && (
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-medium">
+                                🤖 Validat LLM
+                              </span>
+                              {file.result.doubleValidated && (
+                                <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs font-medium">
+                                  ✅✅ Validare dublă
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          
+                          <p className="text-sm text-gray-700 mb-1">
+                            Limbi: {file.result.originalLanguage?.toUpperCase()} → {file.result.targetLanguage?.toUpperCase()}
+                          </p>
+                          <p className="text-sm text-gray-700 mb-3">
+                            Segmente: {file.result.totalSegments}
+                          </p>
+                          
+                          {/* Preview subtitrări dacă există */}
+                          {file.result.preview && file.result.preview.length > 0 && (
+                            <div className="mb-3 p-2 bg-white/50 rounded border border-blue-100">
+                              <p className="text-xs font-semibold text-gray-700 mb-1">Preview:</p>
+                              <div className="text-xs text-gray-600 font-mono">
+                                {file.result.preview.slice(0, 3).map((line: string, i: number) => (
+                                  <div key={i}>{line}</div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {file.downloadUrl && (
+                            <a 
+                              href={`${API_BASE_URL.replace(/\/api$/, '')}/download/${encodeURIComponent(file.downloadUrl)}`}
+                              download 
+                              className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-sky-500 text-white rounded-lg hover:from-blue-600 hover:to-sky-600 transition-all shadow-md text-sm font-medium"
+                            >
+                              <Download className="w-4 h-4" /> 
+                              Descarcă Subtitrare
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {file.status === "error" && (
+                      <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                        <p className="text-sm text-red-600">{file.error}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}
     </div>
   );
 };
+
 
 const DubbingPage: React.FC<{ backendStatus: string }> = ({ backendStatus }) => {
   const [files, setFiles] = useState<ProcessedFile[]>([]);
