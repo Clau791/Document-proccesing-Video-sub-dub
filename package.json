@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Document processing for video and audio",
   "scripts": {
-    "dev": "concurrently \"npm run backend\" \"npm run frontend\" --names \"BACKEND,FRONTEND\" --prefix-colors \"bgBlue.bold,bgMagenta.bold\"",
+    "dev": "concurrently --shell pwsh \"npm run backend\" \"npm run frontend\" --names \"BACKEND,FRONTEND\" --prefix-colors \"bgBlue.bold,bgMagenta.bold\"",
     "backend": "cd backend && python -u app.py",
     "frontend": "cd frontend && npm run dev",
     "install-all": "npm run install-backend && npm run install-frontend",
