@@ -1,170 +1,136 @@
+"""
+🔥 SISTEM AI INTEGRAT - Backend Principal
+==========================================
+Rute directe pentru fiecare serviciu - SIMPLIFICAT
+"""
+
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
-from numpy import fix
+from flask_socketio import SocketIO, emit
 from werkzeug.utils import secure_filename
 import os
+import sys
+import io
 import uuid
 from datetime import datetime
-import json, sys, io
-
-# from services.whisper_ro import transcribe_ro_file #type: ignore
-# from services.subtitle_attacher import attach_subtitle_soft, attach_subtitle_hard #type: ignore
-
-# # Import servicii
-# from services.document_parser import parse_document #type: ignore
-# from services.vosk_transcriber import transcribe_and_generate_srt #type: ignore
-# from services.translator import translate_text #type: ignore
-# from services.subtitle_attacher import attach_subtitle_soft, attach_subtitle_hard, get_video_info #type: ignore
-# from services.subtitle_attacher import attach_subtitle_soft, get_video_info #type: ignore
-# from services.vosk_transcriber import transcribe_and_generate_srt, generate_srt #type: ignore
-# from services.document_translator import translate_document #type: ignore
-# from services.document_translator import translate_document #type: ignore
-
-
-# Modificări pentru app.py - adaugă după importurile existente:
-
-from backend.subtitles.sub import OptimizedSubtitleSystem
-
 from pathlib import Path
-import traceback
 
-# Inițializează sistemul de subtitrare global (pentru a evita reîncărcarea modelelor)
-subtitle_system = None
+# Import servicii direct
+from services.category_i.ppt_analyzer import PPTAnalyzer  
+from services.category_i.document_parser import DocumentParser
+from services.category_i.image_ocr import ImageOCR
+from services.category_ii.document_translator import translate_document
+from services.category_ii.audio_translator import AudioTranslator
+from services.category_ii.video_translator import VideoTranslator
+from services.category_iii.subtitle_generator import SubtitleGenerator
+# from backend.services.category_iii.video_redubber import VideoRedubber
+from services.category_iv.live_subtitle import LiveSubtitleEngine
 
-def get_subtitle_system():
-    """Singleton pentru sistemul de subtitrare"""
-    global subtitle_system
-    if subtitle_system is None:
-        subtitle_system = OptimizedSubtitleSystem(
-            use_gpu=True,
-            use_llm_validation=True  # Activează validarea LLM
-        )
-    return subtitle_system
+# Import sistemul optimizat de subtitrare
+# from backend.subtitles.sub import OptimizedSubtitleSystem
 
-# Modifică endpoint-ul /api/subtitles pentru a folosi noul sistem:
+# ============================================
+# CONFIGURARE
+# ============================================
 
+# Configuration inline (fără dependency de config.py)
+UPLOAD_FOLDER = 'uploads'
+PROCESSED_FOLDER = 'processed'
+CACHE_FOLDER = 'cache'
+MAX_CONTENT_LENGTH = 30 * 1024 * 1024 * 1024  # 30GB
 
+ALLOWED_EXTENSIONS = {
+    'ppt': {'ppt', 'pptx'},
+    'document': {'doc', 'docx', 'pdf', 'epub'},
+    'image': {'jpg', 'jpeg', 'png', 'tiff', 'bmp'},
+    'translate-doc': {'pdf', 'docx', 'pptx'},
+    'translate-audio': {'mp3', 'wav', 'm4a', 'ogg', 'flac'},
+    'translate-video': {'mp4', 'avi', 'mov', 'mkv', 'webm'},
+    'subtitle': {'mp4', 'avi', 'mov', 'mkv', 'webm'},
+    'redub': {'mp4', 'avi', 'mov', 'mkv', 'webm'},
+}
+
+# ============================================
+# UTILITY FUNCTIONS
+# ============================================
 
 def fix_encoding():
-    """Fix pentru encoding UTF-8 pe Windows - versiune sigură"""
+    """Fix pentru encoding UTF-8 pe Windows"""
     try:
-        # Încearcă să seteze encoding doar dacă e necesar
         if sys.platform == 'win32':
-            # Verifică dacă stdout/stderr au atributul buffer
             if hasattr(sys.stdout, 'buffer'):
                 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
             else:
-                # Fallback: setează encoding prin variabile de mediu
-                import os
                 os.environ['PYTHONIOENCODING'] = 'utf-8'
-                print("[ENCODING] UTF-8 setat prin variabile de mediu")
             
             if hasattr(sys.stderr, 'buffer'):
                 sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
             
-            print("[ENCODING] ✅ UTF-8 encoding configurat pentru Windows")
+            print("[ENCODING] ✅ UTF-8 encoding configurat")
     except Exception as e:
         print(f"[ENCODING] ⚠️ Nu s-a putut seta encoding: {e}")
-        print("[ENCODING] Continuă cu encoding-ul default...")
 
-app = Flask(__name__)
-CORS(app)
-
-# Configuration
-UPLOAD_FOLDER = 'uploads'
-PROCESSED_FOLDER = 'processed'
-ALLOWED_EXTENSIONS = {
-    'document-parse': {'pdf', 'doc', 'docx', 'ppt', 'pptx', 'jpg', 'jpeg', 'png'},
-    'translation': {'pdf', 'docx', 'pptx'},
-    'audio-translation': {'mp3', 'wav', 'm4a', 'ogg'},
-    'video-translation': {'mp4', 'avi', 'mov', 'mkv'},
-    'video-subtitle': {'mp4', 'avi', 'mov', 'mkv'},
-    'video-audio-replace': {'mp4', 'avi', 'mov', 'mkv'},
-    'summary-generation': {'mp3', 'mp4', 'wav', 'avi', 'mov'}
-}
-
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['PROCESSED_FOLDER'] = PROCESSED_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = 30000 * 1024 * 1024  # 30GB
-
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-os.makedirs(PROCESSED_FOLDER, exist_ok=True)
-
-def allowed_file(filename, service):
-    if '.' not in filename:
+def validate_file(file, service_type):
+    """Validează tip fișier"""
+    if not file or file.filename == '':
         return False
-    extension = filename.rsplit('.', 1)[1].lower()
-    return extension in ALLOWED_EXTENSIONS.get(service, set())
+    if '.' not in file.filename:
+        return False
+    extension = file.filename.rsplit('.', 1)[1].lower()
+    return extension in ALLOWED_EXTENSIONS.get(service_type, set())
 
-
-# TO DO: Genereaza nume sugestive pentru fisierele uploadate
 def generate_unique_filename(original_filename):
+    """Generează nume unic pentru fișier"""
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     unique_id = str(uuid.uuid4())[:8]
     name, ext = os.path.splitext(original_filename)
     return f"{timestamp}_{unique_id}_{secure_filename(name)}{ext}"
 
+# ============================================
+# INIȚIALIZARE FLASK
+# ============================================
+
+app = Flask(__name__)
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['PROCESSED_FOLDER'] = PROCESSED_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
+
+CORS(app)
+socketio = SocketIO(app, cors_allowed_origins="*")
+
+# Creare directoare
+for directory in [UPLOAD_FOLDER, PROCESSED_FOLDER, CACHE_FOLDER]:
+    Path(directory).mkdir(parents=True, exist_ok=True)
+
+# Inițializare servicii
+# live_engine = LiveSubtitleEngine()
+
+# Singleton pentru sistemul de subtitrare optimizat
+subtitle_system = None
+
+# def get_subtitle_system():
+#     """Singleton pentru sistemul de subtitrare"""
+#     global subtitle_system
+#     if subtitle_system is None:
+#         subtitle_system = OptimizedSubtitleSystem(
+#             use_gpu=True,
+#             use_llm_validation=True
+#         )
+#     return subtitle_system
+
+# ============================================
+# HEALTH CHECK & LLM STATUS
+# ============================================
+
 @app.route('/api/health', methods=['GET'])
 def health_check():
+    """Health check endpoint"""
     return jsonify({
         'status': 'online',
         'message': 'Backend server is running',
-        'timestamp': datetime.now().isoformat()
+        'timestamp': datetime.now().isoformat(),
+        'version': '2.0.0'
     }), 200
-
-# Endpoint nou pentru validare separată a traducerilor existente
-@app.route('/api/validate-translation', methods=['POST'])
-def validate_translation():
-    """
-    Validează și îmbunătățește traduceri existente cu LLM
-    """
-    try:
-        data = request.get_json()
-        
-        original_text = data.get('original_text', '')
-        translated_text = data.get('translated_text', '')
-        source_lang = data.get('source_lang', 'en')
-        target_lang = data.get('target_lang', 'ro')
-        
-        if not original_text or not translated_text:
-            return jsonify({'error': 'Missing text for validation'}), 400
-        
-        print(f"\n[API] Validare traducere cu LLM")
-        print(f"[API] {source_lang} → {target_lang}")
-        print(f"[API] Text original: {original_text[:100]}...")
-        
-        # Obține sistemul și validează
-        system = get_subtitle_system()
-        
-        if not system.llm_validator:
-            return jsonify({'error': 'LLM validator not available'}), 503
-        
-        result = system.llm_validator.validate_translation(
-            original_text=original_text,
-            translated_text=translated_text,
-            source_lang=source_lang,
-            target_lang=target_lang,
-            use_streaming=False
-        )
-        
-        response = {
-            'status': 'success',
-            'original': result.original_text,
-            'initial_translation': result.initial_translation,
-            'validated_translation': result.validated_translation,
-            'confidence': result.confidence_score,
-            'model_used': result.model_used,
-            'validation_time': f"{result.validation_time:.2f}s"
-        }
-        
-        print(f"[API] ✅ Validare completă")
-        print(f"[API] Încredere: {result.confidence_score:.1%}")
-        
-        return jsonify(response), 200
-        
-    except Exception as e:
-        print(f"[API] Eroare validare: {e}")
-        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/llm-status', methods=['GET'])
 def llm_status():
@@ -174,11 +140,7 @@ def llm_status():
         
         OLLAMA_URL = "http://86.126.134.77:11434"
         
-        # Test conexiune Ollama
-        response = requests.get(
-            f"{OLLAMA_URL}/api/tags",
-            timeout=5
-        )
+        response = requests.get(f"{OLLAMA_URL}/api/tags", timeout=5)
         
         if response.status_code == 200:
             data = response.json()
@@ -204,344 +166,482 @@ def llm_status():
             'error': str(e)
         }), 500
 
-# @app.route('/api/translation', methods=['POST'])
-# def translation():
-#     """Translate documents (PDF, Word, PowerPoint)"""
+@app.route('/api/validate-translation', methods=['POST'])
+def validate_translation():
+    """Validează și îmbunătățește traduceri existente cu LLM"""
+    try:
+        data = request.get_json()
+        
+        original_text = data.get('original_text', '')
+        translated_text = data.get('translated_text', '')
+        source_lang = data.get('source_lang', 'en')
+        target_lang = data.get('target_lang', 'ro')
+        
+        if not original_text or not translated_text:
+            return jsonify({'error': 'Missing text for validation'}), 400
+        
+        print(f"\n[VALIDATE] {source_lang} → {target_lang}")
+        print(f"[VALIDATE] Text: {original_text[:100]}...")
+        
+        system = get_subtitle_system()
+        
+        if not system.llm_validator:
+            return jsonify({'error': 'LLM validator not available'}), 503
+        
+        result = system.llm_validator.validate_translation(
+            original_text=original_text,
+            translated_text=translated_text,
+            source_lang=source_lang,
+            target_lang=target_lang,
+            use_streaming=False
+        )
+        
+        response = {
+            'status': 'success',
+            'original': result.original_text,
+            'initial_translation': result.initial_translation,
+            'validated_translation': result.validated_translation,
+            'confidence': result.confidence_score,
+            'model_used': result.model_used,
+            'validation_time': f"{result.validation_time:.2f}s"
+        }
+        
+        print(f"[VALIDATE] ✅ Complete - Confidence: {result.confidence_score:.1%}")
+        
+        return jsonify(response), 200
+        
+    except Exception as e:
+        print(f"[VALIDATE] ERROR: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+# ============================================
+# CATEGORIA I: ANALIZĂ DOCUMENTE
+# ============================================
+
+@app.route('/api/ppt-analysis', methods=['POST'])
+def ppt_analysis():
+    """I.1: Analiză PowerPoint"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+        
+        file = request.files['file']
+        if not validate_file(file, 'ppt'):
+            return jsonify({'error': 'Invalid file type'}), 400
+        
+        filename = generate_unique_filename(file.filename)
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
+        file.save(filepath)
+        
+        print(f"\n[PPT] Processing: {filename}")
+        
+        analyzer = PPTAnalyzer()
+        result = analyzer.analyze(filepath)
+        
+        return jsonify({
+            'service': 'PowerPoint Analysis',
+            'originalFile': filename,
+            'downloadUrl': result.get('output_file', ''),
+            'status': 'success',
+            **result
+        }), 200
+        
+    except Exception as e:
+        print(f"[PPT] ERROR: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/document-analysis', methods=['POST'])
+def document_analysis():
+    """I.2: Analiză Word/PDF/eBook"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+        
+        file = request.files['file']
+        if not validate_file(file, 'document'):
+            return jsonify({'error': 'Invalid file type'}), 400
+        
+        filename = generate_unique_filename(file.filename)
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
+        file.save(filepath)
+        
+        print(f"\n[DOC] Processing: {filename}")
+        
+        parser = DocumentParser()
+        result = parser.parse(filepath)
+        
+        return jsonify({
+            'service': 'Document Analysis',
+            'originalFile': filename,
+            'downloadUrl': result.get('output_file', ''),
+            'status': 'success',
+            **result
+        }), 200
+        
+    except Exception as e:
+        print(f"[DOC] ERROR: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/image-ocr', methods=['POST'])
+def image_ocr():
+    """I.3: OCR Imagini"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+        
+        file = request.files['file']
+        if not validate_file(file, 'image'):
+            return jsonify({'error': 'Invalid file type'}), 400
+        
+        filename = generate_unique_filename(file.filename)
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
+        file.save(filepath)
+        
+        print(f"\n[OCR] Processing: {filename}")
+        
+        ocr = ImageOCR()
+        result = ocr.extract_text(filepath)
+        
+        return jsonify({
+            'service': 'Image OCR',
+            'originalFile': filename,
+            'downloadUrl': result.get('output_file', ''),
+            'status': 'success',
+            **result
+        }), 200
+        
+    except Exception as e:
+        print(f"[OCR] ERROR: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# ============================================
+# CATEGORIA II: TRADUCERE
+# ============================================
+
+@app.route('/api/translate-document', methods=['POST'])
+def translate_doc():
+    """II.1: Traducere Documente"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+        
+        file = request.files['file']
+        src_lang = request.form.get('src_lang', 'en').lower()
+        
+        if not validate_file(file, 'translate-doc'):
+            return jsonify({'error': 'Invalid file type'}), 400
+        
+        filename = generate_unique_filename(file.filename)
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
+        file.save(filepath)
+        
+        print(f"\n[TRANSLATE DOC] {src_lang.upper()} → RO: {filename}")
+
+        result = translate_document(filepath, src_lang=src_lang, dest_lang='ro')
+
+        # --- 👇 CORECȚIE APLICATĂ 👇 ---
+        
+        # 1. Obține calea completă din cheia corectă
+        output_path = result.get('output_path', '') 
+        
+        # 2. Extrage doar numele fișierului
+        output_filename = os.path.basename(output_path)
+        
+        # 3. Construiește URL-ul relativ pentru download
+        download_url = f"/download/{output_filename}" if output_filename else ""
+
+        # 4. Trimite un JSON curat
+        response_data = {
+            'service': 'Document Translation',
+            'originalFile': filename,
+            'originalLanguage': src_lang.upper(),
+            'translatedLanguage': 'RO',
+            'downloadUrl': download_url, # <-- Aici este URL-ul corect
+            'status': 'success',
+            # Adaugă alte chei utile din 'result'
+            'total_pages': result.get('total_pages'),
+            'translated_blocks': result.get('translated_blocks')
+        }
+
+        return jsonify(response_data), 200
+        # --- 👆 Sfârșitul corecției 👆 ---
+        
+    except Exception as e:
+        print(f"[TRANSLATE DOC] ERROR: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/translate-audio', methods=['POST'])
+def translate_audio():
+    """II.2: Traducere Audio"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+        
+        file = request.files['file']
+        src_lang = request.form.get('src_lang', 'en').lower()
+        
+        if not validate_file(file, 'translate-audio'):
+            return jsonify({'error': 'Invalid file type'}), 400
+        
+        filename = generate_unique_filename(file.filename)
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
+        file.save(filepath)
+        
+        print(f"\n[TRANSLATE AUDIO] {src_lang.upper()} → RO: {filename}")
+        
+        translator = AudioTranslator()
+        result = translator.translate(filepath, src_lang=src_lang, dest_lang='ro')
+        
+        return jsonify({
+            'service': 'Audio Translation',
+            'originalFile': filename,
+            'originalLanguage': src_lang.upper(),
+            'translatedLanguage': 'RO',
+            'downloadUrl': result.get('audio_file', ''),
+            'status': 'success',
+            **result
+        }), 200
+        
+    except Exception as e:
+        print(f"[TRANSLATE AUDIO] ERROR: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/translate-video', methods=['POST'])
+def translate_video():
+    """II.3: Traducere Video"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+        
+        file = request.files['file']
+        src_lang = request.form.get('src_lang', 'en').lower()
+        
+        if not validate_file(file, 'translate-video'):
+            return jsonify({'error': 'Invalid file type'}), 400
+        
+        filename = generate_unique_filename(file.filename)
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
+        file.save(filepath)
+        
+        print(f"\n[TRANSLATE VIDEO] {src_lang.upper()} → RO: {filename}")
+        
+        translator = VideoTranslator()
+        result = translator.translate(filepath, src_lang=src_lang, dest_lang='ro')
+        
+        return jsonify({
+            'service': 'Video Translation',
+            'originalFile': filename,
+            'originalLanguage': src_lang.upper(),
+            'translatedLanguage': 'RO',
+            'downloadUrl': result.get('video_file', ''),
+            'status': 'success',
+            **result
+        }), 200
+        
+    except Exception as e:
+        print(f"[TRANSLATE VIDEO] ERROR: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# ============================================
+# CATEGORIA III: SUBTITRARE
+# ============================================
+
+@app.route('/api/subtitle-ro', methods=['POST'])
+def subtitle_ro():
+    """III.1: Subtitrare RO"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+        
+        file = request.files['file']
+        attach_mode = request.form.get('attach', 'soft')
+        
+        if not validate_file(file, 'subtitle'):
+            return jsonify({'error': 'Invalid file type'}), 400
+        
+        filename = generate_unique_filename(file.filename)
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
+        file.save(filepath)
+        
+        print(f"\n[SUBTITLE] Mode: {attach_mode}, File: {filename}")
+        
+        generator = SubtitleGenerator()
+        result = generator.generate(filepath, lang='ro', attach_mode=attach_mode)
+        
+        return jsonify({
+            'service': 'Subtitle Generation',
+            'originalFile': filename,
+            'downloadUrl': result.get('video_file', ''),
+            'status': 'success',
+            **result
+        }), 200
+        
+    except Exception as e:
+        print(f"[SUBTITLE] ERROR: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# @app.route('/api/redub-video', methods=['POST'])
+# def redub_video():
+#     """III.2: Redublare Video"""
 #     try:
 #         if 'file' not in request.files:
 #             return jsonify({'error': 'No file provided'}), 400
         
 #         file = request.files['file']
-#         service = request.form.get('service', 'translation')
+#         src_lang = request.form.get('src_lang', 'ro').lower()
+#         dest_lang = request.form.get('dest_lang', 'en').lower()
         
-#         if file.filename == '':
-#             return jsonify({'error': 'No file selected'}), 400
-        
-#         if not allowed_file(file.filename, service):
-#             return jsonify({'error': 'File type not allowed'}), 400
+#         if not validate_file(file, 'redub'):
+#             return jsonify({'error': 'Invalid file type'}), 400
         
 #         filename = generate_unique_filename(file.filename)
-#         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+#         filepath = os.path.join(UPLOAD_FOLDER, filename)
 #         file.save(filepath)
         
-#         # Parametri traducere
-#         src_lang = request.form.get('src_lang', 'en')  # en, zh, ru, ja
-#         dest_lang = 'ro'  # Întotdeauna către română
+#         print(f"\n[REDUB] {src_lang.upper()} → {dest_lang.upper()}: {filename}")
         
-#         print(f"\n{'='*60}")
-#         print(f"[Translation] Processing: {filename}")
-#         print(f"[Translation] Language: {src_lang} → {dest_lang}")
-#         print(f"{'='*60}\n")
+#         redubber = VideoRedubber()
+#         result = redubber.redub(filepath, src_lang=src_lang, dest_lang=dest_lang)
         
-#         # Traduce documentul
-#         result = translate_document(filepath, src_lang=src_lang, dest_lang=dest_lang)
-        
-#         # Info pentru frontend
-#         file_ext = filename.rsplit('.', 1)[-1].lower()
-#         output_name = os.path.basename(result['output_path'])
-        
-#         response = {
-#             'originalLanguage': src_lang.upper(),
-#             'translatedLanguage': dest_lang.upper(),
+#         return jsonify({
+#             'service': 'Video Redubbing',
 #             'originalFile': filename,
-#             'translatedFile': output_name,
-#             'fileType': file_ext,
-#             'outputFileName': output_name,
-#             'downloadUrl': output_name,
+#             'downloadUrl': result.get('video_file', ''),
 #             'status': 'success',
-#             'timestamp': datetime.now().isoformat()
-#         }
-        
-#         # Adaugă statistici specifice tipului de document
-#         if 'translated_paragraphs' in result:
-#             response['totalParagraphs'] = result['translated_paragraphs']
-#         if 'translated_items' in result:
-#             response['totalItems'] = result['translated_items']
-#         if 'total_pages' in result:
-#             response['totalPages'] = result['total_pages']
-#         if 'total_slides' in result:
-#             response['totalSlides'] = result['total_slides']
-        
-#         print(f"\n{'='*60}")
-#         print(f"[Translation] SUCCESS")
-#         print(f"[Translation] Output: {output_name}")
-#         print(f"{'='*60}\n")
-        
-#         return jsonify(response), 200
+#             **result
+#         }), 200
         
 #     except Exception as e:
-#         import traceback
-#         print(f"\n{'='*60}")
-#         print(f"[Translation] ERROR")
-#         print(f"[Translation] Error: {e}")
-#         traceback.print_exc()
-#         print(f"{'='*60}\n")
+#         print(f"[REDUB] ERROR: {e}")
 #         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/summarise', methods=['POST'])
-def document_summarise():
-    """Process and classify documents"""
+# ============================================
+# CATEGORIA IV: LIVE SUBTITLE
+# ============================================
+
+@app.route('/api/live-start', methods=['POST'])
+def live_start():
+    """IV: Start Live Session"""
     try:
-        if 'file' not in request.files:
-            return jsonify({'error': 'No file provided'}), 400
-
-        file = request.files['file']
-        if file.filename == '':
-            return jsonify({'error': 'No file selected'}), 400
-
-        service = request.form.get('service', 'document-parse')
-        if not allowed_file(file.filename, service):
-            return jsonify({'error': 'File type not allowed'}), 400
-
-        filename = generate_unique_filename(file.filename)
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(filepath)
-
-        result = parse_document(filepath)
-        result['outputFileName'] = f'parsed_{filename}'
-        result['downloadUrl'] = filename
-        result['status'] = 'success'
-        result['timestamp'] = datetime.now().isoformat()
-
-        return jsonify(result), 200
-
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/subtitles', methods=['POST'])
-def subtitles():
-    """
-    Generare subtitrări cu validare LLM opțională
-    Suportă: RO, EN, ZH, JA, RU
-    """
-    try:
-        # 0) Upload & validări
-        if 'file' not in request.files:
-            return jsonify({'error': 'No file provided'}), 400
+        data = request.get_json()
+        session_id = data.get('session_id')
+        participants = data.get('participants', [])
         
-        file = request.files['file']
-        service = request.form.get('service', 'video-subtitle')
+        if not session_id:
+            return jsonify({'error': 'session_id required'}), 400
         
-        if file.filename == '':
-            return jsonify({'error': 'No file selected'}), 400
+        print(f"\n[LIVE] Starting: {session_id}")
         
-        if not allowed_file(file.filename, service):
-            return jsonify({'error': 'File type not allowed'}), 400
+        # result = live_engine.start_session(session_id, participants)
         
-        # Salvare fișier
-        filename = generate_unique_filename(file.filename)
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(filepath)
-        
-        # Parametri subtitrare
-        src_lang = request.form.get('src_lang', 'auto').lower()
-        dest_lang = request.form.get('dest_lang', 'ro').lower()
-        use_llm = request.form.get('use_llm', 'true').lower() == 'true'
-        double_validation = request.form.get('double_validation', 'false').lower() == 'true'
-        
-        print(f"\n{'='*60}")
-        print(f"[API] SUBTITRARE CU VALIDARE LLM")
-        print(f"[API] Fișier: {filename}")
-        print(f"[API] Limbă sursă: {src_lang}")
-        print(f"[API] Limbă țintă: {dest_lang}")
-        print(f"[API] Validare LLM: {use_llm}")
-        print(f"[API] Validare dublă: {double_validation}")
-        print(f"{'='*60}\n")
-        
-        # Obține sistemul de subtitrare
-        system = get_subtitle_system()
-        
-        # Procesare video
-        result = system.process_video_complete(
-            video_path=filepath,
-            source_lang=src_lang if src_lang != 'auto' else None,
-            target_lang=dest_lang,
-            output_dir=app.config['PROCESSED_FOLDER'],
-            subtitle_format='srt',
-            model_size='large-v3',
-            auto_detect_language=(src_lang == 'auto'),
-            use_llm_validation=use_llm,
-            double_validation=double_validation
-        )
-        
-        # Pregătește răspunsul
-        subtitle_file = os.path.basename(result['output'])
-        
-        # Citește câteva linii din subtitrare pentru preview
-        preview_lines = []
-        try:
-            with open(result['output'], 'r', encoding='utf-8-sig') as f:
-                lines = f.readlines()
-                # Ia primele 3 subtitrări pentru preview
-                for i in range(min(12, len(lines))):  # 12 linii = ~3 subtitrări
-                    if lines[i].strip():
-                        preview_lines.append(lines[i].strip())
-        except:
-            preview_lines = []
-        
-        response = {
-            'status': 'success',
-            'originalLanguage': src_lang,
-            'targetLanguage': dest_lang,
-            'subtitleFile': subtitle_file,
-            'downloadUrl': subtitle_file,
-            'totalSegments': result['segments'],
-            'processingTime': f"{result['time']:.1f}s",
-            'llmValidated': result.get('llm_validated', False),
-            'doubleValidated': result.get('double_validated', False),
-            'preview': preview_lines[:9],  # Primele 3 subtitrări
-            'outputFileName': subtitle_file,
-            'timestamp': datetime.now().isoformat()
-        }
-        
-        print(f"\n{'='*60}")
-        print(f"[API] SUCCES - Subtitrare generată")
-        print(f"[API] Fișier: {subtitle_file}")
-        print(f"[API] Segmente: {result['segments']}")
-        print(f"[API] Timp procesare: {result['time']:.1f}s")
-        if result.get('llm_validated'):
-            print(f"[API] ✅ Validare LLM aplicată")
-        print(f"{'='*60}\n")
-        
-        return jsonify(response), 200
+        return jsonify({
+            'service': 'Live Subtitle',
+            'sessionId': session_id,
+            'status': 'started',
+            # **result
+        }), 200
         
     except Exception as e:
-        print(f"\n{'='*60}")
-        print(f"[API] EROARE în generare subtitrări")
-        print(f"[API] Eroare: {e}")
-        traceback.print_exc()
-        print(f"{'='*60}\n")
+        print(f"[LIVE] ERROR: {e}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/dubbing', methods=['POST'])
-def video_dubbing():
-    """
-    Generează SRT românesc din Whisper și atașează subtitrarea în video.
-    Răspunde cu numele FIȘIERULUI NOU din processed/, nu cu originalul.
-    """
+@app.route('/api/live-stop', methods=['POST'])
+def live_stop():
+    """IV: Stop Live Session"""
     try:
-        # 0) Upload & validări
-        if 'file' not in request.files:
-            return jsonify({'error': 'No file provided'}), 400
-
-        file = request.files['file']
-        service = request.form.get('service', 'video-subtitle')
-
-        if file.filename == '':
-            return jsonify({'error': 'No file selected'}), 400
-
-        # dacă ai un helper allowed_file(filename, service), păstrează-l:
-        if not allowed_file(file.filename, service):
-            return jsonify({'error': 'File type not allowed'}), 400
-
-        filename = generate_unique_filename(file.filename)
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(filepath)
-
-        print(f"\n{'='*60}")
-        print(f"[API] Video Subtitle - START")
-        print(f"[API] Fișier salvat: {filepath}")
-        print(f"{'='*60}\n")
-
-       # Mod atașare: soft by default
-        attach_mode = request.form.get('attach', 'soft')
-        print(f"[API] Mod atașare: {attach_mode}")
-
-        # Generează SRT cu Whisper RO
-        print(f"[API] STEP 1: Generare SRT cu Whisper...")
-        res = transcribe_ro_file(filepath)
-        srt_path = res.get('srt_path')
+        data = request.get_json()
+        session_id = data.get('session_id')
         
-        if not srt_path or not os.path.exists(srt_path):
-            return jsonify({'error': 'Transcrierea nu a generat fișier SRT'}), 500
+        if not session_id:
+            return jsonify({'error': 'session_id required'}), 400
         
-        print(f"[API] ✅ SRT generat: {srt_path}")
-
-        # Atașează subtitrarea în video
-        print(f"[API] STEP 2: Atașare subtitrare în video ({attach_mode})...")
+        print(f"\n[LIVE] Stopping: {session_id}")
         
-        if attach_mode == 'hard':
-            attach_result = attach_subtitle_hard(filepath, srt_path)
-        else:
-            attach_result = attach_subtitle_soft(filepath, srt_path, subtitle_lang="ro")
-
-        out_path = attach_result.get("output_path")
+        # result = live_engine.stop_session(session_id)
         
-        if not out_path or not os.path.exists(out_path):
-            return jsonify({'error': f'Nu s-a generat fișierul video cu subtitrare. Path: {out_path}'}), 500
+        return jsonify({
+            'service': 'Live Subtitle',
+            'sessionId': session_id,
+            'status': 'stopped',
+            # **result
+        }), 200
         
-        out_name = os.path.basename(out_path)
-        print(f"[API] ✅ Video cu subtitrare generat: {out_path}")
-        print(f"[API] Nume fișier pentru download: {out_name}")
-
-        # Info video (opțional)
-        info = get_video_info(filepath) or {}
-
-        # Răspuns: indică FIȘIERUL NOU din processed/
-        response = {
-            'duration': info.get('duration', 0),
-            'resolution': info.get('resolution', 'unknown'),
-            'subtitleFile': os.path.basename(srt_path),
-            'subtitledVideo': out_name,
-            'totalSubtitles': len(res.get('segments', [])),
-            'outputFileName': out_name,
-            'downloadUrl': out_name,  # CRITICAL: Numele fișierului din processed/
-            'status': 'success',
-            'timestamp': datetime.now().isoformat()
-        }
-        
-        print(f"\n{'='*60}")
-        print(f"[API] Video Subtitle - SUCCESS")
-        print(f"[API] downloadUrl: {response['downloadUrl']}")
-        print(f"[API] Fișier procesat: {out_path}")
-        print(f"{'='*60}\n")
-        
-        return jsonify(response), 200
-
     except Exception as e:
-        import traceback
-        print(f"\n{'='*60}")
-        print(f"[API] Video Subtitle - ERROR")
-        print(f"[API] Eroare: {e}")
-        traceback.print_exc()
-        print(f"{'='*60}\n")
+        print(f"[LIVE] ERROR: {e}")
         return jsonify({'error': str(e)}), 500
 
+
+# ============================================
+# DOWNLOAD
+# ============================================
 
 @app.route('/download/<path:filename>', methods=['GET'])
 def download_file(filename):
-    """Download processed file"""
+    """Download fișier procesat"""
     try:
-        # Căutăm întâi în processed/, apoi în uploads/
-        for folder in [app.config['PROCESSED_FOLDER'], app.config['UPLOAD_FOLDER']]:
+        for folder in [PROCESSED_FOLDER, UPLOAD_FOLDER]:
             filepath = os.path.join(folder, filename)
             if os.path.exists(filepath):
-                print(f"[DOWNLOAD] OK -> {filepath}")
+                print(f"[DOWNLOAD] ✅ {filepath}")
                 return send_file(filepath, as_attachment=True)
-
-        print(f"[DOWNLOAD] 404 -> {filename}  (checked {app.config['PROCESSED_FOLDER']} and {app.config['UPLOAD_FOLDER']})")
+        
+        print(f"[DOWNLOAD] ❌ 404 -> {filename}")
         return jsonify({'error': 'File not found'}), 404
-
     except Exception as e:
+        print(f"[DOWNLOAD] ERROR: {e}")
         return jsonify({'error': str(e)}), 500
+
+# ============================================
+# ERROR HANDLERS
+# ============================================
 
 @app.errorhandler(413)
 def too_large(e):
-    return jsonify({'error': 'File is too large. Maximum size is 500MB'}), 413
+    return jsonify({'error': 'File too large. Max 30GB'}), 413
 
 @app.errorhandler(500)
 def internal_error(e):
     return jsonify({'error': 'Internal server error'}), 500
 
+@app.errorhandler(404)
+def not_found(e):
+    return jsonify({'error': 'Endpoint not found'}), 404
+
+# ============================================
+# PORNIRE SERVER
+# ============================================
+
 if __name__ == '__main__':
     fix_encoding()
-    print("=" * 60)
-    print("🚀 Document Processing Backend Server")
-    print("=" * 60)
-    print(f"📂 Upload folder: {UPLOAD_FOLDER}")
-    print(f"📂 Processed folder: {PROCESSED_FOLDER}")
-    print(f"🌐 Server running on: http://localhost:5000")
-    print(f"✅ Health check: http://localhost:5000/api/health")
-    print("=" * 60)
     
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    print("\n" + "="*60)
+    print("🚀 SISTEM AI INTEGRAT v2.0")
+    print("="*60)
+    print(f"📂 Upload: {UPLOAD_FOLDER}")
+    print(f"📂 Processed: {PROCESSED_FOLDER}")
+    print(f"🌐 Server: http://localhost:5000")
+    print(f"✅ Health: http://localhost:5000/api/health")
+    print("\n📋 Endpoints:")
+    print("   • /api/health               - Health check")
+    print("   • /api/llm-status           - LLM server status")
+    print("   • /api/validate-translation - LLM validation")
+    print("   • /api/ppt-analysis         - PowerPoint")
+    print("   • /api/document-analysis    - Word/PDF/eBook")
+    print("   • /api/image-ocr            - OCR Imagini")
+    print("   • /api/translate-document   - Traducere Doc")
+    print("   • /api/translate-audio      - Traducere Audio")
+    print("   • /api/translate-video      - Traducere Video")
+    print("   • /api/subtitle-ro          - Subtitrare RO")
+    print("   • /api/redub-video          - Redublare Video")
+    print("   • /api/live-start           - Live Start")
+    print("   • /api/live-stop            - Live Stop")
+    print("="*60 + "\n")
+    
+    socketio.run(
+        app,
+        debug=True,
+        host='0.0.0.0',
+        port=5000,
+        allow_unsafe_werkzeug=True
+    )

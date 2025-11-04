@@ -32,7 +32,7 @@ from transformers import MarianMTModel, MarianTokenizer, MBartForConditionalGene
 from deep_translator import GoogleTranslator
 
 # Adaugă aceste importuri la începutul fișierului sub.py
-from llm_validator import LLMTranslationValidator
+from backend.utilities.llm_validator import LLMTranslationValidator
 
 import subprocess
 import argparse

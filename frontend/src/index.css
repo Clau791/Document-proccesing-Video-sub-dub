@@ -5,6 +5,7 @@
 
 /* Stiluri extra globale */
 body {
+  zoom: 1.6;
   font-family: system-ui, sans-serif;
   background-color: #f9fafb; /* bg-gray-50 */
   color: #111827; /* text-gray-900 */

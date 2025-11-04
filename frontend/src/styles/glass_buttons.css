@@ -1,592 +1,149 @@
-/* CSS Properties pentru animații */
+/* Glass Button + Liquid Glass (FULL, with SHINE FIX)
+   - Unifică <button> și <a>
+   - Shine-ul la hover acoperă 100% din buton (mutat de pe span::after pe ::before-ul elementului clicabil)
+   - Păstrează outline-ul pe ::after
+*/
 
+@keyframes colorShift { 0% { filter:hue-rotate(0deg) } 100% { filter:hue-rotate(60deg) } }
+@keyframes slowPan { 0% { background-position:0% 0% } 100% { background-position:300% 300% } }
+@keyframes floatXY { 0% { transform: translate(0,0) } 50% { transform: translate(10px,-10px) } 100% { transform: translate(0,0) } }
+@keyframes sparkle { 0% { opacity: .12; transform: translateY(0) } 50% { opacity: .35; transform: translateY(2px) } 100% { opacity: .12; transform: translateY(0) } }
+@keyframes grainShift { 0%{ transform:translate(0,0) } 100%{ transform:translate(-80px,-80px) } }
+@keyframes shineSweep { 0% { transform: rotate(0deg) } 100% { transform: rotate(360deg) } }
+@keyframes glowPulse { 0%,100% { opacity:.18 } 50% { opacity:.3 } }
+@keyframes fadeUp { 0% { opacity: 0; transform: translateY(30px); } 100% { opacity: 1; transform: translateY(0); } }
+@keyframes liquidFlow { 0%, 100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+@keyframes waveMove { 0% { transform: translateX(0) translateY(0); } 50% { transform: translateX(-25px) translateY(15px); } 100% { transform: translateX(0) translateY(0); } }
 
+/* Dropdown glass effect */
+select { position: relative; }
+select option { background: rgba(255, 255, 255, 0.98) !important; padding: 14px 16px !important; font-weight: 500 !important; color: #1f2937 !important; transition: all 0.2s ease !important; }
+select option:checked { background: linear-gradient(135deg, rgba(59, 130, 246, 0.95) 0%, rgba(96, 165, 250, 0.9) 100%) !important; color: white !important; font-weight: 600 !important; }
+select option:hover { background: linear-gradient(135deg, rgba(147, 197, 253, 0.3) 0%, rgba(191, 219, 254, 0.25) 100%) !important; color: #1e40af !important; }
+select::-webkit-scrollbar { width: 8px; }
+select::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.5); backdrop-filter: blur(10px); }
+select::-webkit-scrollbar-thumb { background: linear-gradient(180deg, rgba(59, 130, 246, 0.6), rgba(96, 165, 250, 0.6)); border-radius: 4px; }
+select::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, rgba(59, 130, 246, 0.8), rgba(96, 165, 250, 0.8)); }
 
-      @keyframes colorShift { 0% { filter:hue-rotate(0deg) } 100% { filter:hue-rotate(60deg) } }
-      @keyframes slowPan { 0% { background-position:0% 0% } 100% { background-position:300% 300% } }
-      @keyframes floatXY { 0% { transform: translate(0,0) } 50% { transform: translate(10px,-10px) } 100% { transform: translate(0,0) } }
-      @keyframes sparkle { 0% { opacity: .12; transform: translateY(0) } 50% { opacity: .35; transform: translateY(2px) } 100% { opacity: .12; transform: translateY(0) } }
-      @keyframes grainShift { 0%{ transform:translate(0,0) } 100%{ transform:translate(-80px,-80px) } }
-      @keyframes shineSweep { 0% { transform: rotate(0deg) } 100% { transform: rotate(360deg) } }
-      @keyframes glowPulse { 0%,100% { opacity:.18 } 50% { opacity:.3 } }
-      @keyframes fadeUp { 
-        0% { opacity: 0; transform: translateY(30px); }
-        100% { opacity: 1; transform: translateY(0); }
-      }
-      @keyframes liquidFlow {
-        0%, 100% { background-position: 0% 50%; }
-        50% { background-position: 100% 50%; }
-      }
-      @keyframes waveMove {
-        0% { transform: translateX(0) translateY(0); }
-        50% { transform: translateX(-25px) translateY(15px); }
-        100% { transform: translateX(0) translateY(0); }
-      }
-      
+/* LIQUID GLASS */
+.liquidGlass-wrapper { position: relative; display: flex; font-weight: 600; overflow: hidden; color: black; cursor: pointer; box-shadow: 0 8px 12px rgba(0, 0, 0, 0.25), 0 0 30px rgba(59, 130, 246, 0.15); transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 2.2); }
+.liquidGlass-effect { position: absolute; z-index: 0; inset: 0; backdrop-filter: blur(8px) saturate(180%); -webkit-backdrop-filter: blur(8px) saturate(180%); filter: url(#glass-distortion); overflow: hidden; isolation: isolate; }
+.liquidGlass-tint { z-index: 1; position: absolute; inset: 0; background: linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, rgba(191, 219, 254, 0.25) 100%); animation: waveMove 6s ease-in-out infinite; }
+.liquidGlass-shine { position: absolute; inset: 0; z-index: 2; overflow: hidden; box-shadow: inset 3px 3px 2px 0 rgba(255, 255, 255, 0.6), inset -2px -2px 2px 1px rgba(255, 255, 255, 0.5), inset 0 0 20px rgba(147, 197, 253, 0.2); }
+.liquidGlass-content { flex: 1; position: relative; z-index: 3; }
+.liquidGlass-card { padding: 2.5rem; border-radius: 3rem; }
+.liquidGlass-card:hover { padding: 2.8rem; border-radius: 3.5rem; }
+.liquidGlass-card:hover .card-icon { transform: scale(0.95); }
+.card-icon { transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 2.2); }
+.liquidGlass-header, .liquidGlass-footer { padding: 0.6rem; }
+.liquidGlass-header:hover, .liquidGlass-footer:hover { padding: 0.8rem; }
+.fade-up { animation: fadeUp 1.5s ease-out forwards; }
+.fade-up-delay-1 { animation: fadeUp 1.5s ease-out 0.1s forwards; opacity: 0; }
+.fade-up-delay-2 { animation: fadeUp 1.5s ease-out 0.2s forwards; opacity: 0; }
+.fade-up-delay-3 { animation: fadeUp 1.5s ease-out 0.3s forwards; opacity: 0; }
+@media (prefers-reduced-motion: reduce) { [data-anim], .fade-up, .fade-up-delay-1, .fade-up-delay-2, .fade-up-delay-3, .liquidGlass-wrapper, .card-icon { animation: none !important; transform: none !important; opacity: 1 !important; transition: none !important; } }
 
-      /* Dropdown glass effect - Enhanced */
-      select {
-        position: relative;
-      }
+@property --angle-1 { syntax: "<angle>"; inherits: false; initial-value: -75deg; }
+@property --angle-2 { syntax: "<angle>"; inherits: false; initial-value: -45deg; }
+:root { --anim--hover-time: 400ms; --anim--hover-ease: cubic-bezier(0.25, 1, 0.5, 1); }
+@keyframes dropdownSlideDown { 0% { opacity: 0; transform: translateY(-10px); } 100% { opacity: 1; transform: translateY(0); } }
+@keyframes dropdownSlideUp { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-10px); } }
+.dropdown-enter { animation: dropdownSlideDown 0.5s ease-out forwards; will-change: transform, opacity; }
+.dropdown-exit { animation: dropdownSlideUp 0.5s ease-in forwards; will-change: transform, opacity; }
 
-      select option {
-        background: rgba(255, 255, 255, 0.98) !important;
-        padding: 14px 16px !important;
-        font-weight: 500 !important;
-        color: #1f2937 !important;
-        transition: all 0.2s ease !important;
-      }
+/* ========== BUTTON WRAP ========== */
+.button-wrap { position: relative; z-index: 2; border-radius: 999vw; background: transparent; pointer-events: none; transition: all var(--anim--hover-time) var(--anim--hover-ease); }
 
-      select option:checked {
-        background: linear-gradient(135deg, rgba(59, 130, 246, 0.95) 0%, rgba(96, 165, 250, 0.9) 100%) !important;
-        color: white !important;
-        font-weight: 600 !important;
-      }
+/* SHADOW SUB-BUTTON */
+.button-shadow { --shadow-cuttoff-fix: 2em; position: absolute; width: calc(100% + var(--shadow-cuttoff-fix)); height: calc(100% + var(--shadow-cuttoff-fix)); top: calc(0% - var(--shadow-cuttoff-fix) / 2); left: calc(0% - var(--shadow-cuttoff-fix) / 2); filter: blur(clamp(2px, 0.125em, 12px)); overflow: visible; pointer-events: none; }
+.button-shadow::after { content: ""; position: absolute; z-index: 0; inset: 0; border-radius: 999vw; background: linear-gradient(180deg, rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.1)); width: calc(100% - var(--shadow-cuttoff-fix) - 0.25em); height: calc(100% - var(--shadow-cuttoff-fix) - 0.25em); top: calc(var(--shadow-cuttoff-fix) - 0.5em); left: calc(var(--shadow-cuttoff-fix) - 0.875em); padding: 0.125em; box-sizing: border-box; mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude; transition: all var(--anim--hover-time) var(--anim--hover-ease); overflow: visible; opacity: 1; }
 
-      select option:hover {
-        background: linear-gradient(135deg, rgba(147, 197, 253, 0.3) 0%, rgba(191, 219, 254, 0.25) 100%) !important;
-        color: #1e40af !important;
-      }
+/* ========== CLICKABLE (button/a) ========== */
+.button-wrap :is(button, a) { --border-width: clamp(1px, 0.0625em, 4px); all: unset; cursor: pointer; position: relative; -webkit-tap-highlight-color: rgba(0, 0, 0, 0); pointer-events: auto; z-index: 3; border-radius: 999vw; backdrop-filter: blur(clamp(1px, 0.125em, 4px)); transition: all var(--anim--hover-time) var(--anim--hover-ease); box-sizing: border-box; width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.5em; line-height: 1; text-decoration: none; }
+.button-wrap :is(button, a):hover { transform: scale(0.975); backdrop-filter: blur(0.01em); }
 
-      /* Dropdown list container styling (WebKit) */
-      select::-webkit-scrollbar {
-        width: 8px;
-      }
+/* TEXT */
+.button-wrap :is(button, a) span { position: relative; display: block; user-select: none; font-family: "Inter", sans-serif; letter-spacing: -0.02em; font-weight: 600; font-size: 0.95rem; -webkit-font-smoothing: antialiased; transition: all var(--anim--hover-time) var(--anim--hover-ease); padding-inline: 1.5em; padding-block: 0.875em; }
+.button-wrap :is(button, a):hover span { text-shadow: 0.025em 0.025em 0.025em rgba(0, 0, 0, 0.12); }
 
-      select::-webkit-scrollbar-track {
-        background: rgba(255, 255, 255, 0.5);
-        backdrop-filter: blur(10px);
-      }
+/* SVG baseline fix */
+.button-wrap :is(button, a) svg { display: block; width: 1.25rem; height: 1.25rem; flex: 0 0 auto; }
 
-      select::-webkit-scrollbar-thumb {
-        background: linear-gradient(180deg, rgba(59, 130, 246, 0.6), rgba(96, 165, 250, 0.6));
-        border-radius: 4px;
-      }
-
-      select::-webkit-scrollbar-thumb:hover {
-        background: linear-gradient(180deg, rgba(59, 130, 246, 0.8), rgba(96, 165, 250, 0.8));
-      }
-      
-      
-      /* LIQUID GLASS STYLES - Enhanced water effect */
-      .liquidGlass-wrapper {
-        position: relative;
-        display: flex;
-        font-weight: 600;
-        overflow: hidden;
-        color: black;
-        cursor: pointer;
-        box-shadow: 0 8px 12px rgba(0, 0, 0, 0.25), 0 0 30px rgba(59, 130, 246, 0.15);
-        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 2.2);
-      }
-      
-      .liquidGlass-effect {
-        position: absolute;
-        z-index: 0;
-        inset: 0;
-        backdrop-filter: blur(8px) saturate(180%);
-        -webkit-backdrop-filter: blur(8px) saturate(180%);
-        filter: url(#glass-distortion);
-        overflow: hidden;
-        isolation: isolate;
-      }
-      
-      .liquidGlass-tint {
-        z-index: 1;
-        position: absolute;
-        inset: 0;
-        background: linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, rgba(191, 219, 254, 0.25) 100%);
-        animation: waveMove 6s ease-in-out infinite;
-      }
-      
-      .liquidGlass-shine {
-        position: absolute;
-        inset: 0;
-        z-index: 2;
-        overflow: hidden;
-        box-shadow: inset 3px 3px 2px 0 rgba(255, 255, 255, 0.6),
-          inset -2px -2px 2px 1px rgba(255, 255, 255, 0.5),
-          inset 0 0 20px rgba(147, 197, 253, 0.2);
-      }
-      
-      .liquidGlass-content {
-        flex: 1;
-        position: relative;
-        z-index: 3;
-      }
-      
-      /* Card specific hover effect */
-      .liquidGlass-card {
-        padding: 2.5rem;
-        border-radius: 3rem;
-      }
-      
-      .liquidGlass-card:hover {
-        padding: 2.8rem;
-        border-radius: 3.5rem;
-      }
-      
-      .liquidGlass-card:hover .card-icon {
-        transform: scale(0.95);
-      }
-      
-      .card-icon {
-        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 2.2);
-      }
-      
-      /* Header/Footer specific */
-      .liquidGlass-header,
-      .liquidGlass-footer {
-        padding: 0.6rem;
-      }
-      
-      .liquidGlass-header:hover,
-      .liquidGlass-footer:hover {
-        padding: 0.8rem;
-      }
-      
-      .fade-up {
-        animation: fadeUp 1.5s ease-out forwards;
-      }
-      
-      .fade-up-delay-1 {
-        animation: fadeUp 1.5s ease-out 0.1s forwards;
-        opacity: 0;
-      }
-      
-      .fade-up-delay-2 {
-        animation: fadeUp 1.5s ease-out 0.2s forwards;
-        opacity: 0;
-      }
-      
-      .fade-up-delay-3 {
-        animation: fadeUp 1.5s ease-out 0.3s forwards;
-        opacity: 0;
-      }
-      
-      @media (prefers-reduced-motion: reduce) { 
-        [data-anim], .fade-up, .fade-up-delay-1, .fade-up-delay-2, .fade-up-delay-3,
-        .liquidGlass-wrapper, .card-icon { 
-          animation: none !important; 
-          transform: none !important;
-          opacity: 1 !important;
-          transition: none !important;
-        } 
-      }
-   
-@property --angle-1 {
-  syntax: "<angle>";
-  inherits: false;
-  initial-value: -75deg;
-}
-
-@property --angle-2 {
-  syntax: "<angle>";
-  inherits: false;
-  initial-value: -45deg;
-}
-
-:root {
-  --anim--hover-time: 400ms;
-  --anim--hover-ease: cubic-bezier(0.25, 1, 0.5, 1);
-}
-
-@keyframes dropdownSlideDown {
-  0% {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes dropdownSlideUp {
-  0% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-}
-
-.dropdown-enter {
-  animation: dropdownSlideDown 0.5s ease-out forwards;
-  will-change: transform, opacity;
-}
-
-.dropdown-exit {
-  animation: dropdownSlideUp 0.5s ease-in forwards;
-  will-change: transform, opacity;
-}
-
-
-/* ========== BUTTON WRAP CONTAINER ========== */
-.button-wrap {
-  position: relative;
-  z-index: 2;
-  border-radius: 999vw;
-  background: transparent;
-  pointer-events: none;
-  transition: all var(--anim--hover-time) var(--anim--hover-ease);
-}
-
-/* ========== BUTTON SHADOW ========== */
-.button-shadow {
-  --shadow-cuttoff-fix: 2em;
-  position: absolute;
-  width: calc(100% + var(--shadow-cuttoff-fix));
-  height: calc(100% + var(--shadow-cuttoff-fix));
-  top: calc(0% - var(--shadow-cuttoff-fix) / 2);
-  left: calc(0% - var(--shadow-cuttoff-fix) / 2);
-  filter: blur(clamp(2px, 0.125em, 12px));
-  overflow: visible;
-  pointer-events: none;
-}
-
-.button-shadow::after {
+/* ===== SHINE FIX =====
+   Mutăm efectul de "sheen" (shine) de pe span::after pe ::before-ul
+   elementului clickable. Astfel acoperă 100% din lățime/înălțime,
+   indiferent dacă există icon în stânga/dreapta. */
+.button-wrap :is(button, a)::before {
   content: "";
   position: absolute;
-  z-index: 0;
   inset: 0;
-  border-radius: 999vw;
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.1));
-  width: calc(100% - var(--shadow-cuttoff-fix) - 0.25em);
-  height: calc(100% - var(--shadow-cuttoff-fix) - 0.25em);
-  top: calc(var(--shadow-cuttoff-fix) - 0.5em);
-  left: calc(var(--shadow-cuttoff-fix) - 0.875em);
-  padding: 0.125em;
-  box-sizing: border-box;
-  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  mask-composite: exclude;
-  transition: all var(--anim--hover-time) var(--anim--hover-ease);
-  overflow: visible;
-  opacity: 1;
-}
-
-/* ========== BASE BUTTON STYLES ========== */
-.button-wrap button {
-  --border-width: clamp(1px, 0.0625em, 4px);
-  all: unset;
-  cursor: pointer;
-  position: relative;
-  -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
-  pointer-events: auto;
-  z-index: 3;
-  border-radius: 999vw;
-  backdrop-filter: blur(clamp(1px, 0.125em, 4px));
-  transition: all var(--anim--hover-time) var(--anim--hover-ease);
-  box-sizing: border-box;
-  width: 100%;
-  display: block;
-}
-
-.button-wrap button:hover {
-  transform: scale(0.975);
-  backdrop-filter: blur(0.01em);
-}
-
-/* Button Text */
-.button-wrap button span {
-  position: relative;
-  display: block;
-  user-select: none;
-  font-family: "Inter", sans-serif;
-  letter-spacing: -0.02em;
-  font-weight: 600;
-  font-size: 0.95rem;
-  -webkit-font-smoothing: antialiased;
-  transition: all var(--anim--hover-time) var(--anim--hover-ease);
-  padding-inline: 1.5em;
-  padding-block: 0.875em;
-}
-
-.button-wrap button:hover span {
-  text-shadow: 0.025em 0.025em 0.025em rgba(0, 0, 0, 0.12);
-}
-
-/* Text Shine Effect */
-.button-wrap button span::after {
-  content: "";
-  display: block;
-  position: absolute;
-  z-index: 1;
-  width: calc(100% - var(--border-width));
-  height: calc(100% - var(--border-width));
-  top: calc(0% + var(--border-width) / 2);
-  left: calc(0% + var(--border-width) / 2);
-  box-sizing: border-box;
-  border-radius: 999vw;
-  overflow: clip;
-  background: linear-gradient(
-    var(--angle-2),
-    rgba(255, 255, 255, 0) 0%,
-    rgba(255, 255, 255, 0.5) 40% 50%,
-    rgba(255, 255, 255, 0) 55%
-  );
-  z-index: 3;
-  mix-blend-mode: screen;
+  border-radius: inherit;
   pointer-events: none;
-  background-size: 200% 200%;
-  background-position: 0% 50%;
-  background-repeat: no-repeat;
-  transition: background-position calc(var(--anim--hover-time) * 1.25) var(--anim--hover-ease),
+  z-index: 2; /* deasupra fundalului, sub outline-ul ::after */
+  /* Două layere: [0] SHINE dinamic, [1] luciu top subtil */
+  background:
+    linear-gradient(var(--angle-2), rgba(255,255,255,0) 0%, rgba(255,255,255,0.55) 40% 55%, rgba(255,255,255,0) 70%) 0% 50% / 220% 220% no-repeat,
+    linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0));
+  transition:
+    background-position calc(var(--anim--hover-time) * 1.25) var(--anim--hover-ease),
     --angle-2 calc(var(--anim--hover-time) * 1.25) var(--anim--hover-ease);
+  mix-blend-mode: screen;
 }
+.button-wrap :is(button, a):hover::before { background-position: 25% 50%, 0% 0%; }
+.button-wrap :is(button, a):active::before { background-position: 50% 15%, 0% 0%; --angle-2: -15deg; }
 
-.button-wrap button:hover span::after {
-  background-position: 25% 50%;
-}
-
-.button-wrap button:active span::after {
-  background-position: 50% 15%;
-  --angle-2: -15deg;
-}
-
-/* Button Outline */
-.button-wrap button::after {
+/* OUTLINE / BORDER dinamic pe ::after (rămâne ca înainte) */
+.button-wrap :is(button, a)::after {
   content: "";
   position: absolute;
-  z-index: 1;
   inset: 0;
-  border-radius: 999vw;
+  border-radius: inherit;
   width: calc(100% + var(--border-width));
   height: calc(100% + var(--border-width));
   top: calc(0% - var(--border-width) / 2);
   left: calc(0% - var(--border-width) / 2);
   padding: var(--border-width);
   box-sizing: border-box;
-  background: conic-gradient(
-      from var(--angle-1) at 50% 50%,
-      rgba(0, 0, 0, 0.5),
-      rgba(0, 0, 0, 0) 5% 40%,
-      rgba(0, 0, 0, 0.5) 50%,
-      rgba(0, 0, 0, 0) 60% 95%,
-      rgba(0, 0, 0, 0.5)
-    ),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.5));
+  background: conic-gradient(from var(--angle-1) at 50% 50%, rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0) 5% 40%, rgba(0, 0, 0, 0.5) 50%, rgba(0, 0, 0, 0) 60% 95%, rgba(0, 0, 0, 0.5)),
+              linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.5));
   mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   mask-composite: exclude;
-  transition: all var(--anim--hover-time) var(--anim--hover-ease),
-    --angle-1 500ms ease;
+  transition: all var(--anim--hover-time) var(--anim--hover-ease), --angle-1 500ms ease;
   box-shadow: inset 0 0 0 calc(var(--border-width) / 2) rgba(255, 255, 255, 0.5);
 }
+.button-wrap :is(button, a):hover::after { --angle-1: -125deg; }
+.button-wrap :is(button, a):active::after { --angle-1: -75deg; }
 
-.button-wrap button:hover::after {
-  --angle-1: -125deg;
-}
+/* Shadow reactions */
+.button-wrap:has(:is(button, a):hover) .button-shadow { filter: blur(clamp(2px, 0.0625em, 6px)); transition: filter var(--anim--hover-time) var(--anim--hover-ease); }
+.button-wrap:has(:is(button, a):hover) .button-shadow::after { top: calc(var(--shadow-cuttoff-fix) - 0.875em); opacity: 1; }
+.button-wrap:has(:is(button, a):active) { transform: rotate3d(1, 0, 0, 25deg); }
+.button-wrap:has(:is(button, a):active) .button-shadow { filter: blur(clamp(2px, 0.125em, 12px)); }
+.button-wrap:has(:is(button, a):active) .button-shadow::after { top: calc(var(--shadow-cuttoff-fix) - 0.5em); opacity: 0.75; }
+.button-wrap:has(:is(button, a):active) span { text-shadow: 0.025em 0.25em 0.05em rgba(0, 0, 0, 0.12); }
 
-.button-wrap button:active::after {
-  --angle-1: -75deg;
-}
+/* ===== VARIANTE CULOARE ===== */
+.button-wrap-blue .glass-btn-blue { background: linear-gradient(-75deg, rgba(69, 131, 230, 0.6), rgba(51, 108, 230, 0.75), rgba(50, 121, 235, 0.6)); color: white; box-shadow: inset 0 0.125em 0.125em rgba(0, 0, 0, 0.05), inset 0 -0.125em 0.125em rgba(59, 130, 246, 0.3), 0 0.25em 0.125em -0.125em rgba(37, 99, 235, 0.4), 0 0 0.1em 0.25em inset rgba(59, 130, 246, 0.2), 0 0 0 0 rgba(59, 130, 246, 1); }
+.button-wrap-blue .glass-btn-blue:hover { box-shadow: inset 0 0.125em 0.125em rgba(0, 0, 0, 0.05), inset 0 -0.125em 0.125em rgba(59, 130, 246, 0.4), 0 0.15em 0.05em -0.1em rgba(37, 99, 235, 0.5), 0 0 0.05em 0.1em inset rgba(59, 130, 246, 0.3), 0 0 0 0 rgba(59, 130, 246, 1); }
+.button-wrap-blue .glass-btn-blue span { color: white; text-shadow: 0em 0.25em 0.05em rgba(0, 0, 0, 0.2); }
+.button-wrap-blue:has(:is(button, a):active) .glass-btn-blue { box-shadow: inset 0 0.125em 0.125em rgba(0, 0, 0, 0.1), inset 0 -0.125em 0.125em rgba(59, 130, 246, 0.4), 0 0.125em 0.125em -0.125em rgba(37, 99, 235, 0.4), 0 0 0.1em 0.25em inset rgba(59, 130, 246, 0.2), 0 0.225em 0.05em 0 rgba(37, 99, 235, 0.15), 0 0.25em 0 0 rgba(59, 130, 246, 0.5), inset 0 0.25em 0.05em 0 rgba(0, 0, 0, 0.15); }
+.button-wrap-blue .button-shadow::after { background: linear-gradient(180deg, rgba(59, 130, 246, 0.3), rgba(37, 99, 235, 0.2)); }
 
-/* Shadow Hover Effects */
-.button-wrap:has(button:hover) .button-shadow {
-  filter: blur(clamp(2px, 0.0625em, 6px));
-  transition: filter var(--anim--hover-time) var(--anim--hover-ease);
-}
+.button-wrap-purple .glass-btn-purple { background: linear-gradient(-75deg, rgba(168, 85, 247, 0.6), rgba(202, 78, 200, 0.75), rgba(236, 72, 153, 0.6)); color: white; box-shadow: inset 0 0.125em 0.125em rgba(0, 0, 0, 0.05), inset 0 -0.125em 0.125em rgba(168, 85, 247, 0.3), 0 0.25em 0.125em -0.125em rgba(219, 39, 119, 0.4), 0 0 0.1em 0.25em inset rgba(168, 85, 247, 0.2), 0 0 0 0 rgba(168, 85, 247, 1); }
+.button-wrap-purple .glass-btn-purple:hover { box-shadow: inset 0 0.125em 0.125em rgba(0, 0, 0, 0.05), inset 0 -0.125em 0.125em rgba(168, 85, 247, 0.4), 0 0.15em 0.05em -0.1em rgba(219, 39, 119, 0.5), 0 0 0.05em 0.1em inset rgba(168, 85, 247, 0.3), 0 0 0 0 rgba(168, 85, 247, 1); }
+.button-wrap-purple .glass-btn-purple span { color: white; text-shadow: 0em 0.25em 0.05em rgba(0, 0, 0, 0.2); }
+.button-wrap-purple:has(:is(button, a):active) .glass-btn-purple { box-shadow: inset 0 0.125em 0.125em rgba(0, 0, 0, 0.1), inset 0 -0.125em 0.125em rgba(168, 85, 247, 0.4), 0 0.125em 0.125em -0.125em rgba(219, 39, 119, 0.4), 0 0 0.1em 0.25em inset rgba(168, 85, 247, 0.2), 0 0.225em 0.05em 0 rgba(219, 39, 119, 0.15), 0 0.25em 0 0 rgba(168, 85, 247, 0.5), inset 0 0.25em 0.05em 0 rgba(0, 0, 0, 0.15); }
+.button-wrap-purple .button-shadow::after { background: linear-gradient(180deg, rgba(168, 85, 247, 0.3), rgba(219, 39, 119, 0.2)); }
 
-.button-wrap:has(button:hover) .button-shadow::after {
-  top: calc(var(--shadow-cuttoff-fix) - 0.875em);
-  opacity: 1;
-}
+.button-wrap-green .glass-btn-green { background: linear-gradient(-75deg, rgba(34, 197, 94, 0.6), rgba(22, 163, 74, 0.75), rgba(21, 128, 61, 0.6)); color: white; box-shadow: inset 0 0.125em 0.125em rgba(0, 0, 0, 0.05), inset 0 -0.125em 0.125em rgba(22, 163, 74, 0.3), 0 0.25em 0.125em -0.125em rgba(21, 128, 61, 0.4), 0 0 0.1em 0.25em inset rgba(22, 163, 74, 0.2), 0 0 0 0 rgba(22, 163, 74, 1); }
+.button-wrap-green .glass-btn-green:hover { box-shadow: inset 0 0.125em 0.125em rgba(0, 0, 0, 0.05), inset 0 -0.125em 0.125em rgba(22, 163, 74, 0.4), 0 0.15em 0.05em -0.1em rgba(21, 128, 61, 0.5), 0 0 0.05em 0.1em inset rgba(22, 163, 74, 0.3), 0 0 0 0 rgba(22, 163, 74, 1); }
+.button-wrap-green .glass-btn-green span { color: white; text-shadow: 0em 0.25em 0.05em rgba(0, 0, 0, 0.2); }
+.button-wrap-green:has(:is(button, a):active) .glass-btn-green { box-shadow: inset 0 0.125em 0.125em rgba(0, 0, 0, 0.1), inset 0 -0.125em 0.125em rgba(22, 163, 74, 0.4), 0 0.125em 0.125em -0.125em rgba(21, 128, 61, 0.4), 0 0 0.1em 0.25em inset rgba(22, 163, 74, 0.2), 0 0.225em 0.05em 0 rgba(21, 128, 61, 0.15), 0 0.25em 0 0 rgba(22, 163, 74, 0.5), inset 0 0.25em 0.05em 0 rgba(0, 0, 0, 0.15); }
+.button-wrap-green .button-shadow::after { background: linear-gradient(180deg, rgba(22, 163, 74, 0.3), rgba(21, 128, 61, 0.2)); }
 
-/* 3D Rotation on Active */
-.button-wrap:has(button:active) {
-  transform: rotate3d(1, 0, 0, 25deg);
-}
-
-.button-wrap:has(button:active) .button-shadow {
-  filter: blur(clamp(2px, 0.125em, 12px));
-}
-
-.button-wrap:has(button:active) .button-shadow::after {
-  top: calc(var(--shadow-cuttoff-fix) - 0.5em);
-  opacity: 0.75;
-}
-
-.button-wrap:has(button:active) span {
-  text-shadow: 0.025em 0.25em 0.05em rgba(0, 0, 0, 0.12);
-}
-
-/* ========== GREEN BUTTON VARIANT ========== */
-.button-wrap-green .glass-btn-green {
-  background: linear-gradient(
-    -75deg,
-    rgba(16, 185, 129, 0.6),
-    rgba(5, 150, 105, 0.75),
-    rgba(16, 185, 129, 0.6)
-  );
-  color: white;
-  box-shadow: inset 0 0.125em 0.125em rgba(0, 0, 0, 0.05),
-    inset 0 -0.125em 0.125em rgba(16, 185, 129, 0.3),
-    0 0.25em 0.125em -0.125em rgba(5, 150, 105, 0.4),
-    0 0 0.1em 0.25em inset rgba(16, 185, 129, 0.2),
-    0 0 0 0 rgba(16, 185, 129, 1);
-}
-
-.button-wrap-green .glass-btn-green:hover {
-  box-shadow: inset 0 0.125em 0.125em rgba(0, 0, 0, 0.05),
-    inset 0 -0.125em 0.125em rgba(16, 185, 129, 0.4),
-    0 0.15em 0.05em -0.1em rgba(5, 150, 105, 0.5),
-    0 0 0.05em 0.1em inset rgba(16, 185, 129, 0.3),
-    0 0 0 0 rgba(16, 185, 129, 1);
-}
-
-.button-wrap-green .glass-btn-green span {
-  color: white;
-  text-shadow: 0em 0.25em 0.05em rgba(0, 0, 0, 0.2);
-}
-
-.button-wrap-green:has(button:active) .glass-btn-green {
-  box-shadow: inset 0 0.125em 0.125em rgba(0, 0, 0, 0.1),
-    inset 0 -0.125em 0.125em rgba(16, 185, 129, 0.4),
-    0 0.125em 0.125em -0.125em rgba(5, 150, 105, 0.4),
-    0 0 0.1em 0.25em inset rgba(16, 185, 129, 0.2),
-    0 0.225em 0.05em 0 rgba(5, 150, 105, 0.15),
-    0 0.25em 0 0 rgba(16, 185, 129, 0.5),
-    inset 0 0.25em 0.05em 0 rgba(0, 0, 0, 0.15);
-}
-
-/* Green Shadow */
-.button-wrap-green .button-shadow::after {
-  background: linear-gradient(180deg, rgba(16, 185, 129, 0.3), rgba(5, 150, 105, 0.2));
-}
-
-/* ========== RED BUTTON VARIANT ========== */
-.button-wrap-red .glass-btn-red {
-  background: linear-gradient(
-    -75deg,
-    rgba(239, 68, 68, 0.6),
-    rgba(220, 38, 38, 0.75),
-    rgba(239, 68, 68, 0.6)
-  );
-  color: white;
-  box-shadow: inset 0 0.125em 0.125em rgba(0, 0, 0, 0.05),
-    inset 0 -0.125em 0.125em rgba(239, 68, 68, 0.3),
-    0 0.25em 0.125em -0.125em rgba(220, 38, 38, 0.4),
-    0 0 0.1em 0.25em inset rgba(239, 68, 68, 0.2),
-    0 0 0 0 rgba(239, 68, 68, 1);
-}
-
-.button-wrap-red .glass-btn-red:hover {
-  box-shadow: inset 0 0.125em 0.125em rgba(0, 0, 0, 0.05),
-    inset 0 -0.125em 0.125em rgba(239, 68, 68, 0.4),
-    0 0.15em 0.05em -0.1em rgba(220, 38, 38, 0.5),
-    0 0 0.05em 0.1em inset rgba(239, 68, 68, 0.3),
-    0 0 0 0 rgba(239, 68, 68, 1);
-}
-
-.button-wrap-red .glass-btn-red span {
-  color: white;
-  text-shadow: 0em 0.25em 0.05em rgba(0, 0, 0, 0.2);
-}
-
-.button-wrap-red:has(button:active) .glass-btn-red {
-  box-shadow: inset 0 0.125em 0.125em rgba(0, 0, 0, 0.1),
-    inset 0 -0.125em 0.125em rgba(239, 68, 68, 0.4),
-    0 0.125em 0.125em -0.125em rgba(220, 38, 38, 0.4),
-    0 0 0.1em 0.25em inset rgba(239, 68, 68, 0.2),
-    0 0.225em 0.05em 0 rgba(220, 38, 38, 0.15),
-    0 0.25em 0 0 rgba(239, 68, 68, 0.5),
-    inset 0 0.25em 0.05em 0 rgba(0, 0, 0, 0.15);
-}
-
-/* Red Shadow */
-.button-wrap-red .button-shadow::after {
-  background: linear-gradient(180deg, rgba(239, 68, 68, 0.3), rgba(220, 38, 38, 0.2));
-}
-
-/* ========== RESPONSIVE ========== */
-@media (max-width: 640px) {
-  .button-wrap button span {
-    font-size: 0.85rem;
-    padding-inline: 1.2em;
-    padding-block: 0.75em;
-  }
-}
-
-/* Touch Devices */
+/* RESPONSIVE */
+@media (max-width: 640px) { .button-wrap :is(button, a) span { font-size: 0.85rem; padding-inline: 1.2em; padding-block: 0.75em; } }
 @media (hover: none) and (pointer: coarse) {
-  .button-wrap button span::after,
-  .button-wrap button:active span::after {
-    --angle-2: -45deg;
-  }
-  
-  .button-wrap button::after,
-  .button-wrap button:hover::after,
-  .button-wrap button:active::after {
-    --angle-1: -75deg;
-  }
-}
-
-
-/* ========== BLUE BUTTON VARIANT ========== */
-.button-wrap-blue .glass-btn-blue {
-  background: linear-gradient(
-    -75deg,
-    rgba(69, 131, 230, 0.6),
-    rgba(51, 108, 230, 0.75),
-    rgba(50, 121, 235, 0.6)
-  );
-  color: white;
-  box-shadow: inset 0 0.125em 0.125em rgba(0, 0, 0, 0.05),
-    inset 0 -0.125em 0.125em rgba(59, 130, 246, 0.3),
-    0 0.25em 0.125em -0.125em rgba(37, 99, 235, 0.4),
-    0 0 0.1em 0.25em inset rgba(59, 130, 246, 0.2),
-    0 0 0 0 rgba(59, 130, 246, 1);
-}
-
-.button-wrap-blue .glass-btn-blue:hover {
-  box-shadow: inset 0 0.125em 0.125em rgba(0, 0, 0, 0.05),
-    inset 0 -0.125em 0.125em rgba(59, 130, 246, 0.4),
-    0 0.15em 0.05em -0.1em rgba(37, 99, 235, 0.5),
-    0 0 0.05em 0.1em inset rgba(59, 130, 246, 0.3),
-    0 0 0 0 rgba(59, 130, 246, 1);
-}
-
-.button-wrap-blue .glass-btn-blue span {
-  color: white;
-  text-shadow: 0em 0.25em 0.05em rgba(0, 0, 0, 0.2);
-}
-
-.button-wrap-blue:has(button:active) .glass-btn-blue {
-  box-shadow: inset 0 0.125em 0.125em rgba(0, 0, 0, 0.1),
-    inset 0 -0.125em 0.125em rgba(59, 130, 246, 0.4),
-    0 0.125em 0.125em -0.125em rgba(37, 99, 235, 0.4),
-    0 0 0.1em 0.25em inset rgba(59, 130, 246, 0.2),
-    0 0.225em 0.05em 0 rgba(37, 99, 235, 0.15),
-    0 0.25em 0 0 rgba(59, 130, 246, 0.5),
-    inset 0 0.25em 0.05em 0 rgba(0, 0, 0, 0.15);
-}
-
-/* Blue Shadow */
-.button-wrap-blue .button-shadow::after {
-  background: linear-gradient(180deg, rgba(59, 130, 246, 0.3), rgba(37, 99, 235, 0.2));
-}
-
-/* ========== RESPONSIVE ========== */
-@media (max-width: 640px) {
-  .button-wrap button span {
-    font-size: 0.85rem;
-    padding-inline: 1.2em;
-    padding-block: 0.75em;
-  }
-}
-
-/* Touch Devices */
-@media (hover: none) and (pointer: coarse) {
-  .button-wrap button span::after,
-  .button-wrap button:active span::after {
-    --angle-2: -45deg;
-  }
-  
-  .button-wrap button::after,
-  .button-wrap button:hover::after,
-  .button-wrap button:active::after {
-    --angle-1: -75deg;
-  }
+  .button-wrap :is(button, a)::before { background-position: 35% 50%, 0 0; --angle-2: -45deg; }
+  .button-wrap :is(button, a)::after { --angle-1: -75deg; }
 }

@@ -53,6 +53,13 @@ from gtts import gTTS  # listată în dependențe; nu este folosită direct aici
 # Configurare
 from dotenv import load_dotenv
 
+import google.generativeai as genai
+from google.cloud import texttospeech
+from google.generativeai.types import GenerationConfig
+
+import whisper
+import torch
+
 # Încarcă variabilele de mediu
 load_dotenv()
 
@@ -60,23 +67,35 @@ load_dotenv()
 class AudioVideoProcessor:
     """Clasă pentru procesarea fișierelor audio și video"""
 
-    def __init__(self, openai_api_key: str = None):
+    def __init__(self): # Am eliminat 'openai_api_key' din parametri
         """
         Inițializare procesor
-
-        Args:
-            openai_api_key: Cheia API OpenAI (sau setată în .env ca OPENAI_API_KEY)
         """
-        self.api_key = openai_api_key or os.getenv('OPENAI_API_KEY')
+        self.api_key = os.getenv('VITE_GEMINI_API_KEY') 
         if not self.api_key:
-            raise ValueError("OpenAI API key este necesară! Setează OPENAI_API_KEY în .env sau ca parametru.")
+            raise ValueError("GEMINI API key este necesară! Setează VITE_GEMINI_API_KEY în .env sau ca parametru.")
 
-        self.client = OpenAI(api_key=self.api_key)
+        # --- Codul tău existent pentru Google ---
+        genai.configure(api_key=self.api_key)
+        self.gemini_model = genai.GenerativeModel('gemini-2.0-flash-lite')
+        self.tts_client = texttospeech.TextToSpeechClient()
+        # --- Sfârșit cod Google ---
 
         # Extensii suportate
         self.audio_extensions = {'.mp3', '.wav', '.m4a', '.flac', '.ogg', '.aac'}
         self.video_extensions = {'.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv'}
-
+        
+        # --- ADAUGĂ ACEST BLOC PENTRU WHISPER LOCAL ---
+        print("🚀 Se încarcă modelul Whisper local...")
+        # Verifică dacă există GPU (CUDA)
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        print(f"Whisper va rula pe: {self.device.upper()}")
+        
+        # Alegem modelul "small" - e un echilibru bun viteză/acuratețe pentru multilingual
+        # Vezi secțiunea de mai jos pentru alte opțiuni (tiny, base, medium, large)
+        self.whisper_model = whisper.load_model("small", device=self.device)
+        print("✓ Model Whisper local încărcat.")
+        # --- SFÂRȘIT BLOC NOU ---
     # -----------------------
     # Detectare tip fișier
     # -----------------------
@@ -155,7 +174,7 @@ class AudioVideoProcessor:
     # -----------------------
     def transcribe_audio(self, audio_path: str) -> str:
         """
-        Transcrie audio folosind OpenAI Whisper
+        Transcrie audio folosind modelul Whisper LOCAL
 
         Args:
             audio_path: Calea către fișierul audio
@@ -163,25 +182,83 @@ class AudioVideoProcessor:
         Returns:
             Textul transcris
         """
-        print(f"🎤 Transcriu audio: {audio_path}")
+        print(f"🎤 (Whisper Local) Transcriu audio: {audio_path}")
 
         try:
-            with open(audio_path, 'rb') as audio_file:
-                transcript = self.client.audio.transcriptions.create(
-                    model="whisper-1",
-                    file=audio_file,
-                    response_format="text"
-                )
+            # Modelul este deja încărcat în self.whisper_model
+            # Folosim fp16 (half-precision) dacă suntem pe GPU (CUDA) pentru viteză
+            options = dict(fp16=torch.cuda.is_available())
+            
+            # Rulează transcrierea
+            result = self.whisper_model.transcribe(audio_path, **options)
+            
+            transcript = result["text"].strip()
+            
+            print(f"✓ Audio transcris ({len(transcript)} caractere)")
 
+            # Afișează limba detectată (util pentru debugging)
+            detected_lang = result.get("language", "nedetectată")
+            print(f"ℹ️ Limba detectată de Whisper: {detected_lang}")
+
+            return transcript
+            
+        except Exception as e:
+            print(f"✗ Eroare la transcriere (Whisper Local): {e}")
+            raise
+        
+
+    def transcribe_audio_AI(self, audio_path: str) -> str:
+        """
+        Transcrie audio folosind Google Gemini (modelul generativ)
+
+        Args:
+            audio_path: Calea către fișierul audio
+
+        Returns:
+            Textul transcris
+        """
+        print(f"🎤 (Gemini) Transcriu audio: {audio_path}")
+        
+        audio_file_data = None
+        try:
+            # 1. Încărcăm fișierul audio la Google
+            # Acest pas este necesar pentru a-l putea referenția în prompt
+            print(f"📤 (Gemini) Încarc fișierul audio...")
+            audio_file_data = genai.upload_file(path=audio_path)
+            print(f"✓ Fișier încărcat: {audio_file_data.name}")
+
+            # 2. Transcriem folosind modelul Gemini
+            # Dăm modelului un prompt și fișierul audio
+            prompt = "Transcrie acest fișier audio. Returnează doar textul transcris, fără absolut niciun alt comentariu."
+            
+            response = self.gemini_model.generate_content([prompt, audio_file_data])
+
+            # Verificăm dacă răspunsul a fost blocat
+            if not response.parts:
+                raise ValueError(f"Eroare la transcriere (Gemini): Răspunsul a fost blocat. Feedback: {response.prompt_feedback}")
+
+            transcript = response.text.strip()
             print(f"✓ Audio transcris ({len(transcript)} caractere)")
             return transcript
+            
         except Exception as e:
-            print(f"✗ Eroare la transcriere: {e}")
+            print(f"✗ Eroare la transcriere (Gemini): {e}")
             raise
+        finally:
+            # 3. Ștergem fișierul de pe serverele Google (important pentru curățenie)
+            if audio_file_data:
+                try:
+                    print(f"🗑️ (Gemini) Șterg fișierul încărcat {audio_file_data.name}...")
+                    genai.delete_file(audio_file_data.name)
+                    print("✓ Fișier temporar șters.")
+                except Exception as e_del:
+                    # Aceasta nu este o eroare fatală, doar o avertizare
+                    print(f"⚠️ Avertisment: Nu s-a putut șterge fișierul încărcat {audio_file_data.name}: {e_del}")
+
 
     def translate_to_romanian(self, text: str) -> str:
         """
-        Traduce text în română folosind OpenAI
+        Traduce text în română folosind Google Gemini
 
         Args:
             text: Textul de tradus
@@ -189,64 +266,89 @@ class AudioVideoProcessor:
         Returns:
             Textul tradus în română
         """
-        print(f"🌍 Traduc text în română...")
+        print(f"🌍 (Gemini) Traduc text în română...")
+
+        # Promptul pentru Gemini este mai direct
+        system_prompt = "Ești un traducător profesionist. Traduce textul următor în limba română, păstrând sensul și tonul original. Returnează doar traducerea, fără comentarii suplimentare."
+        full_prompt = f"{system_prompt}\n\nText de tradus:\n{text}"
+        
+        # Configurarea generării
+        config = GenerationConfig(
+            temperature=0.3
+        )
 
         try:
-            response = self.client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "Ești un traducător profesionist. Traduce textul următor în limba română, păstrând sensul și tonul original. Returnează doar traducerea, fără comentarii suplimentare."
-                    },
-                    {
-                        "role": "user",
-                        "content": text
-                    }
-                ],
-                temperature=0.3
+            # Apelul API către Gemini
+            response = self.gemini_model.generate_content(
+                full_prompt,
+                generation_config=config
             )
 
-            translated_text = response.choices[0].message.content.strip()
+            # Extragerea textului este mai simplă
+            translated_text = response.text.strip()
             print(f"✓ Text tradus ({len(translated_text)} caractere)")
             return translated_text
         except Exception as e:
-            print(f"✗ Eroare la traducere: {e}")
+            print(f"✗ Eroare la traducere (Gemini): {e}")
+            # Poți inspecta 'response.prompt_feedback' pentru erori de siguranță
+            # if response.prompt_feedback:
+            #     print(f"Blocat de siguranță: {response.prompt_feedback}")
             raise
 
     def generate_audio_from_text(self, text: str, output_path: str, lang: str = 'ro') -> str:
         """
-        Generează fișier audio din text folosind OpenAI TTS
+        Generează fișier audio din text folosind Google Cloud TTS
 
         Args:
             text: Textul pentru generare audio
             output_path: Calea pentru fișierul audio generat (ex. *.mp3)
-            lang: Limba (implicit 'ro')
+            lang: Codul limbii (ex. 'ro' -> 'ro-RO')
 
         Returns:
             Calea către fișierul audio generat
         """
-        print(f"🔊 Generez audio în română...")
+        print(f"🔊 (Google TTS) Generez audio în română...")
+        
+        # Converteste 'ro' în codul BCP-47 'ro-RO'
+        language_code = "ro-RO" 
+
         try:
-            # Notă: în SDK-ul nou există și varianta streaming (with_streaming_response)
-            response = self.client.audio.speech.create(
-                model="gpt-4o-mini-tts",
-                voice="alloy",
-                input=text,
+            # Setarea textului de intrare
+            synthesis_input = texttospeech.SynthesisInput(text=text)
+
+            # Alegerea vocii (WaveNet este calitatea premium)
+            # 'alloy' (OpenAI) este înlocuit cu o voce specifică limbii române
+            voice = texttospeech.VoiceSelectionParams(
+                language_code=language_code,
+                name="ro-RO-Wavenet-A"  # O voce feminină de înaltă calitate
             )
+
+            # Selectarea tipului de fișier (MP3, ca în exemplul tău)
+            audio_config = texttospeech.AudioConfig(
+                audio_encoding=texttospeech.AudioEncoding.MP3
+            )
+
+            # Apelul API către Google Cloud TTS
+            response = self.tts_client.synthesize_speech(
+                input=synthesis_input, 
+                voice=voice, 
+                audio_config=audio_config
+            )
+
+            # Salvarea fișierului audio
             with open(output_path, "wb") as f:
-                f.write(response.read())
+                f.write(response.audio_content) # response.audio_content în loc de response.read()
 
             print(f"✅ Audio generat: {output_path}")
             return output_path
 
         except Exception as e:
-            print(f"❌ Eroare la generarea audio: {e}")
+            print(f"❌ Eroare la generarea audio (Google TTS): {e}")
             raise
 
     def generate_summary(self, text: str) -> str:
         """
-        Generează un rezumat inteligent al conținutului
+        Generează un rezumat inteligent al conținutului folosind Google Gemini
 
         Args:
             text: Textul pentru rezumat
@@ -254,15 +356,10 @@ class AudioVideoProcessor:
         Returns:
             Rezumatul generat
         """
-        print(f"📝 Generez rezumat...")
+        print(f"📝 (Gemini) Generez rezumat...")
 
-        try:
-            response = self.client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": """Ești un asistent care creează rezumate concise și informative în limba română.
+        # Promptul de sistem este identic
+        system_prompt = """Ești un asistent care creează rezumate concise și informative în limba română.
 Creează un rezumat structurat cu următoarele secțiuni:
 
 REZUMAT EXECUTIV:
@@ -276,21 +373,25 @@ DETALII IMPORTANTE:
 
 CONCLUZII:
 - Takeaway-uri finale
-                        """
-                    },
-                    {
-                        "role": "user",
-                        "content": f"Creează un rezumat detaliat pentru următorul conținut:\n\n{text}"
-                    }
-                ],
-                temperature=0.5
+"""
+        full_prompt = f"{system_prompt}\n\nCreează un rezumat detaliat pentru următorul conținut:\n\n{text}"
+        
+        config = GenerationConfig(
+            temperature=0.5
+        )
+        
+        try:
+            # Apelul API către Gemini
+            response = self.gemini_model.generate_content(
+                full_prompt,
+                generation_config=config
             )
 
-            summary = response.choices[0].message.content.strip()
+            summary = response.text.strip()
             print(f"✓ Rezumat generat ({len(summary)} caractere)")
             return summary
         except Exception as e:
-            print(f"✗ Eroare la generarea rezumatului: {e}")
+            print(f"✗ Eroare la generarea rezumatului (Gemini): {e}")
             raise
 
     def save_summary(self, summary: str, output_path: str) -> str:
@@ -433,7 +534,7 @@ CONCLUZII:
 
         try:
             # 1. Transcriere audio original
-            transcript = self.transcribe_audio(str(audio_path))
+            transcript = self.transcribe_audio_AI(str(audio_path))
 
             # 2. Traducere în română
             translated_text = self.translate_to_romanian(transcript)

@@ -1,23 +1,37 @@
-import React, { useMemo, useState , useEffect} from "react";
-import { FileText, Video, Subtitles, Download, Upload, CheckCircle, Loader, AlertCircle, X } from "lucide-react";
+import React, { useState, useEffect, useMemo } from "react";
+import { 
+  FileText, Video, Subtitles, Download, Upload, CheckCircle, Loader, AlertCircle, X, 
+  FileImage, BookOpen, Languages, Mic, VideoIcon, MessageSquare, Presentation,
+  FileType, Image as ImageIcon, Globe, PlayCircle, Radio
+} from "lucide-react";
 import './styles/glass_buttons.css';
 
 /* =====================================================
-   ✅ Cerințe implementate (FINAL + GLASS EFFECT)
-   1) DOAR App.tsx modificat.
-   2) "Rezumat Document": alegere între REZUMAT și TRADUCERE INTEGRALĂ.
-   3) "Subtitrare": două căsuțe de selecție limbă (din/în)
-   4) Fundal alb-albastru, animații FOARTE lente
-   5) ✨ FADE-UP animations pentru carduri
-   6) ✨ GLASS EFFECT pe header și footer cu sticky/fixed positioning
+   ✅ SISTEM AI INTEGRAT - Conform cerințe funcționale
+   
+   I. Analiză și stocare documente
+      1. PowerPoint (PPT/PPTX) - Slide-uri, paragrafe, bullet points
+      2. Word/PDF/eBook - Paragrafe individuale cu asocieri
+      3. Imagine (JPG, PNG, TIFF) - OCR inteligent
+   
+   II. Traducere automată multilingvă (EN/ZH/RU/JA → RO)
+      1. Documente scrise - Traducere completă
+      2. Fișiere audio - ASR + Traducere + Generare audio RO
+      3. Fișiere video - Extragere audio + Traducere + TTS RO
+   
+   III. Subtitrare automată și redublaj
+      1. Subtitrare în limba originală (RO → RO)
+      2. Redublare video (audio înlocuit RO → EN sau invers)
+   
+   IV. Subtitrare bidirecțională în timp real (RO ↔ RU)
    ===================================================== */
 
-// ---- CONFIG ----
-const API_BASE_URL = "http://localhost:5000/api";
+// Backend rulează pe localhost:5000
+const BASE_URL = 'http://localhost:5000';
+const API_URL = `${BASE_URL}/api`;
 
-// ---- Limbi ----
 type Lang = "en" | "zh" | "ru" | "ja" | "ro";
-const LANG_LABEL: Record<Lang | "ro", string> = {
+const LANG_LABEL: Record<Lang, string> = {
   en: "🇬🇧 Engleză (EN)",
   zh: "🇨🇳 Chineză (ZH)",
   ru: "🇷🇺 Rusă (RU)",
@@ -25,7 +39,37 @@ const LANG_LABEL: Record<Lang | "ro", string> = {
   ro: "🇷🇴 Română (RO)",
 };
 
-// ---------- Global Keyframes + Liquid Glass Effect ----------
+// ========== UTILITY FUNCTIONS ==========
+
+// Utility pentru upload
+const uploadFile = async (
+  endpoint: string,
+  file: File,
+  additionalData?: Record<string, string>
+): Promise<any> => {
+  const formData = new FormData();
+  formData.append('file', file);
+  
+  if (additionalData) {
+    Object.entries(additionalData).forEach(([key, value]) => {
+      formData.append(key, value);
+    });
+  }
+
+  const response = await fetch(`${API_URL}${endpoint}`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Upload failed');
+  }
+
+  return response.json();
+};
+
+// ========== SVG Filters & Global Styles ==========
 const GlobalKeyframes = () => (
   <>
     <svg style={{ position: 'absolute', width: 0, height: 0 }}>
@@ -41,7 +85,7 @@ const GlobalKeyframes = () => (
   </>
 );
 
-// ---------- Error Boundary ----------
+// ========== Error Boundary ==========
 class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean; error?: any }>{
   constructor(props: any) { super(props); this.state = { hasError: false }; }
   static getDerivedStateFromError(error: any) { return { hasError: true, error }; }
@@ -63,14 +107,9 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
   }
 }
 
-// ---------- Animated Background ----------
+// ========== Animated Background ==========
 const BackgroundFX: React.FC = () => {
-  const GRAIN_URL = useMemo(() => {
-    const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.35'/></svg>`;
-    return `data:image/svg+xml;utf8,${svg}`;
-  }, []);
-
-  const blobs = Array.from({ length: 6 }).map((_, i) => ({
+  const blobs = Array.from({ length: 3 }).map((_, i) => ({
     id: i,
     size: 240 + (i % 3) * 110,
     top: `${(i * 13) % 85 + 5}%`,
@@ -78,15 +117,6 @@ const BackgroundFX: React.FC = () => {
     duration: 120 + (i % 5) * 40,
     delay: i * 1.2,
     even: i % 2 === 0,
-  }));
-
-  const sparkles = Array.from({ length: 20 }).map((_, i) => ({
-    id: i,
-    top: `${(i * 7) % 100}%`,
-    left: `${(i * 13) % 100}%`,
-    size: (i % 3) + 1,
-    delay: (i % 10) * 1.2,
-    duration: 30 + (i % 6) * 10,
   }));
 
   return (
@@ -119,7 +149,7 @@ const BackgroundFX: React.FC = () => {
       </div>
 
       {blobs.map((b, idx) => (
-        <div key={b.id} data-anim className={`absolute rounded-full ${b.even ? "blur-3xl opacity-[0.16]" : "blur-2xl opacity-[0.10]"}`} style={{
+        <div key={b.id} data-anim className={`absolute rounded-full ${b.even ? "blur-xl opacity-[0.12]" : "blur-lg opacity-[0.8]"}`} style={{
           top: b.top,
           left: b.left,
           width: b.size,
@@ -131,113 +161,11 @@ const BackgroundFX: React.FC = () => {
           animation: `floatXY ${b.duration}s ease-in-out ${b.delay}s infinite`,
         }} />
       ))}
-
-      {sparkles.map((s) => (
-        <span key={`s-${s.id}`} data-anim className="absolute rounded-full bg-white/70 shadow-[0_0_14px_rgba(255,255,255,0.6)]" style={{
-          top: s.top,
-          left: s.left,
-          width: s.size,
-          height: s.size,
-          animation: `sparkle ${s.duration}s ease-in-out ${s.delay}s infinite`,
-        }} />
-      ))}
-
-      <div data-anim className="absolute inset-0 opacity-[0.05] mix-blend-overlay" style={{ backgroundImage: `url("${GRAIN_URL}")`, animation: "grainShift 16s steps(6) infinite" }} />
     </div>
   );
 };
 
-// ================= Types =================
-interface ApiResponse { summary?: string; bullets?: string[]; jobId?: string; downloadUrl?: string; file_path?: string }
-interface JobStatus { status: "queued" | "running" | "done" | "error"; resultUrl?: string; log?: string }
-interface ProcessedFile { id: string; name: string; type: string; status: "pending" | "processing" | "completed" | "error"; progress: number; result?: any; error?: string; downloadUrl?: string }
-
-// ================= Mock & Real APIs =================
-const mockApi = {
-  summarize: async (_formData: FormData): Promise<ApiResponse> => {
-    await new Promise((r) => setTimeout(r, 700));
-    return { summary: "Acesta este un rezumat generat automat...", bullets: ["Punct cheie 1", "Punct cheie 2", "Punct cheie 3"] };
-  },
-  translateDoc: async (_formData: FormData): Promise<ApiResponse> => {
-    await new Promise((r) => setTimeout(r, 800));
-    return { downloadUrl: `doc_ro_${Date.now()}.pdf` };
-  },
-  subtitles: async (_formData: FormData) => ({ jobId: `sub_${Date.now()}` }),
-  dubbing: async () => ({ jobId: `dub_${Date.now()}` }),
-  getStatus: async (jobId: string): Promise<JobStatus> => {
-    await new Promise((r) => setTimeout(r, 900));
-    return { status: "done", resultUrl: `https://example.com/result/${jobId}.mp4`, log: "Procesare finalizată cu succes" };
-  },
-};
-
-const realApi = {
-  checkHealth: async (): Promise<boolean> => {
-    try { const res = await fetch(`${API_BASE_URL}/health`); return res.ok } catch { return false }
-  },
-  summarizeOrTranslateDoc: async (
-    file: File,
-    mode: "summary" | "translation",
-    srcLang: Lang,
-    destLang: Lang,
-    detailLevel: number = 50,
-    youtubeLink: string = ""
-  ): Promise<any> => {
-    const form = new FormData();
-    form.append("file", file);
-    form.append("service", mode === "summary" ? "summarize" : "translation");
-    form.append("src_lang", srcLang);
-    form.append("dest_lang", destLang);
-    form.append("detail_level", detailLevel.toString());
-    form.append("youtube_link", youtubeLink);
-
-    const endpoint = mode === "summary" ? "/summarize" : "/translation";
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, { method: "POST", body: form });
-    if (!response.ok) { try { const e = await response.json(); throw new Error(e?.error || e?.message || "Processing failed") } catch { throw new Error("Processing failed") } }
-    return response.json();
-  },
-  createSubtitles: async (
-    file: File,
-    srcLang: Lang,
-    destLang: Lang
-  ): Promise<any> => {
-    const form = new FormData();
-    form.append("file", file);
-    form.append("service", "subtitles");
-    form.append("src_lang", srcLang);
-    form.append("dest_lang", destLang);
-
-    const response = await fetch(`${API_BASE_URL}/subtitles`, { method: "POST", body: form });
-    if (!response.ok) { try { const e = await response.json(); throw new Error(e?.error || e?.message || "Processing failed") } catch { throw new Error("Processing failed") } }
-    return response.json();
-  },
-  createDubbing: async (file: File): Promise<any> => {
-    const form = new FormData();
-    form.append("file", file);
-    const response = await fetch(`${API_BASE_URL}/dubbing`, { method: "POST", body: form });
-    if (!response.ok) { try { const e = await response.json(); throw new Error(e?.error || e?.message || "Processing failed") } catch { throw new Error("Processing failed") } }
-    return response.json();
-  },
-};
-
-// ================= UI Components =================
-const Footer: React.FC = () => (
-  <footer className="liquidGlass-wrapper liquidGlass-footer sticky bottom-0 left-0 right-0 z-40 mt-auto rounded-3xl mx-4 mb-4">
-    <div className="liquidGlass-effect" />
-    <div className="liquidGlass-tint" />
-    <div className="liquidGlass-shine" />
-    <div className="liquidGlass-content container mx-auto px-6 py-4 w-full">
-      <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
-          <div className="bg-gradient-to-r from-blue-500 to-sky-500 p-1.5 rounded-lg shadow-md"><FileText className="w-5 h-5 text-white" /></div>
-          <span className="text-gray-800 font-semibold">Media Processor</span>
-        </div>
-        <div className="text-gray-600 text-sm text-center">© 2025 Media Processor Platform. Toate drepturile rezervate.</div>
-        <div className="text-gray-600 text-sm">Creat cu <span className="text-red-500">♥</span> pentru procesare multimedia</div>
-      </div>
-    </div>
-  </footer>
-);
-
+// ========== NavBar ==========
 const NavBar: React.FC<{ currentPage: string; onNavigate: (page: string) => void; backendStatus: string }> = ({ currentPage, onNavigate, backendStatus }) => (
   <nav className="liquidGlass-wrapper liquidGlass-header sticky top-0 left-0 right-0 z-50 rounded-3xl mx-4 mt-4 mb-2">
     <div className="liquidGlass-effect" />
@@ -248,8 +176,8 @@ const NavBar: React.FC<{ currentPage: string; onNavigate: (page: string) => void
         <button onClick={() => onNavigate("home")} className="flex items-center gap-3 hover:opacity-80 transition-all duration-300 group">
           <div className="bg-gradient-to-br from-blue-500 to-sky-500 p-2.5 rounded-xl shadow-lg group-hover:shadow-xl group-hover:scale-105 transition-all duration-300"><FileText className="w-7 h-7 text-white" /></div>
           <div className="text-left">
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-sky-600 bg-clip-text text-transparent">Media Processor</h1>
-            <p className="text-sm text-gray-600">Procesare inteligentă multimedia</p>
+            <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-sky-600 bg-clip-text text-transparent">Sistem AI Integrat</h1>
+            <p className="text-sm text-gray-600">Analiză, Traducere, Subtitrare</p>
           </div>
         </button>
         <div className="flex items-center gap-4">
@@ -266,69 +194,125 @@ const NavBar: React.FC<{ currentPage: string; onNavigate: (page: string) => void
   </nav>
 );
 
-const HomeCards: React.FC<{ onNavigate: (page: string) => void; backendStatus: string }> = ({ onNavigate, backendStatus }) => {
-  const services = [
-    { id: "summary", title: "Rezumat/Traducere Document", description: "Alege între rezumat sau traducere integrală (EN/ZH/RU/JA → RO)", icon: FileText, color: "from-blue-400 to-sky-400", hoverColor: "hover:from-blue-500 hover:to-sky-500", endpoint: "/api/summarize | /api/translation" },
-    { id: "subtitles", title: "Subtitrare Video (EN/ZH/RU/JA → RO)", description: "Alege limba sursă și destinație (RO)", icon: Subtitles, color: "from-blue-400 to-sky-400", hoverColor: "hover:from-blue-500 hover:to-sky-500", endpoint: "/api/subtitles" },
-    { id: "dubbing", title: "Dublare Video", description: "Dublează videoclipuri cu voci AI naturale", icon: Video, color: "from-blue-400 to-sky-400", hoverColor: "hover:from-blue-500 hover:to-sky-500", endpoint: "/api/dubbing" },
+// ========== Footer ==========
+const Footer: React.FC = () => (
+  <footer className="liquidGlass-wrapper liquidGlass-footer sticky bottom-0 left-0 right-0 z-40 mt-auto rounded-3xl mx-4 mb-4">
+    <div className="liquidGlass-effect" />
+    <div className="liquidGlass-tint" />
+    <div className="liquidGlass-shine" />
+    <div className="liquidGlass-content container mx-auto px-6 py-4 w-full">
+      <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="flex items-center gap-2">
+          <div className="bg-gradient-to-r from-blue-500 to-sky-500 p-1.5 rounded-lg shadow-md"><FileText className="w-5 h-5 text-white" /></div>
+          <span className="text-gray-800 font-semibold">Sistem AI Integrat</span>
+        </div>
+        <div className="text-gray-600 text-sm text-center">© 2025 Platformă de procesare AI. Toate drepturile rezervate.</div>
+        <div className="text-gray-600 text-sm">Creat cu <span className="text-red-500">♥</span> pentru procesare multimedia</div>
+      </div>
+    </div>
+  </footer>
+);
+
+// ========== Home - Categorii principale ==========
+const HomeCards: React.FC<{ onNavigate: (page: string) => void }> = ({ onNavigate }) => {
+  const categories = [
+    {
+      id: "category-i",
+      title: "I. Analiză și Stocare Documente",
+      description: "Procesare inteligentă PPT, Word, PDF, Imagine cu OCR",
+      icon: BookOpen,
+      color: "from-blue-400 to-sky-400",
+      subcategories: [
+        { id: "ppt", name: "PowerPoint", icon: Presentation },
+        { id: "word-pdf", name: "Word/PDF/eBook", icon: FileType },
+        { id: "image-ocr", name: "Imagine OCR", icon: ImageIcon }
+      ]
+    },
+    {
+      id: "category-ii",
+      title: "II. Traducere Automată Multilingvă",
+      description: "EN/ZH/RU/JA → RO pentru documente, audio, video",
+      icon: Languages,
+      color: "from-purple-400 to-pink-400",
+      subcategories: [
+        { id: "translate-docs", name: "Documente scrise", icon: FileText },
+        { id: "translate-audio", name: "Fișiere audio", icon: Mic },
+        { id: "translate-video", name: "Fișiere video", icon: VideoIcon }
+      ]
+    },
+    {
+      id: "category-iii",
+      title: "III. Subtitrare și Redublaj",
+      description: "Subtitrare automată RO → RO și redublare video",
+      icon: Subtitles,
+      color: "from-green-400 to-emerald-400",
+      subcategories: [
+        { id: "subtitle-ro", name: "Subtitrare RO → RO", icon: Subtitles },
+        { id: "redub-video", name: "Redublare video", icon: Video }
+      ]
+    },
+    {
+      id: "category-iv",
+      title: "IV. Subtitrare Bidirecțională Live",
+      description: "Dialog în timp real RO ↔ RU cu subtitrări",
+      icon: Radio,
+      color: "from-orange-400 to-red-400",
+      subcategories: [
+        { id: "live-subtitle", name: "Dialog live RO ↔ RU", icon: MessageSquare }
+      ]
+    }
   ];
-  
+
   return (
     <div className="min-h-[calc(100vh-140px)]">
       <div className="container mx-auto px-4 py-20">
         <div className="text-center mb-16 fade-up">
-          {/* <div className="inline-block mb-6"><div className="bg-gradient-to-br from-blue-500 to-sky-500 p-4 rounded-2xl shadow-2xl animate-pulse"><FileText className="w-16 h-16 text-white" /></div></div> */}
-          <h1 className="text-6xl font-bold bg-gradient-to-r from-blue-600 via-sky-600 to-blue-700 bg-clip-text text-transparent mb-7" style={{ paddingBottom: '0.15em' }}>Media Processing Platform</h1>
-          {/* <p className="text-xl text-gray-700/90 max-w-2xl mx-auto">Alege serviciul de care ai nevoie pentru a procesa fișierele tale multimedia</p>
-          {backendStatus === "offline" && (
-            <div className="mt-8 p-5 bg-red-50/80 border-2 border-red-200 rounded-xl max-w-2xl mx-auto shadow-lg">
-              <p className="text-red-600 font-medium">⚠️ Backend server is offline. Running in demo mode.</p>
-            </div> )} */}
-          
+          <h1 className="text-6xl font-bold bg-gradient-to-r from-blue-600 via-sky-600 to-blue-700 bg-clip-text text-transparent mb-7" style={{ paddingBottom: '0.15em' }}>
+            Sistem AI Integrat
+          </h1>
+          <p className="text-xl text-gray-700/90 max-w-3xl mx-auto">
+            Alege categoria de servicii AI pentru procesarea documentelor și fișierelor multimedia
+          </p>
         </div>
-        <div className="grid md:grid-cols-3 gap-8 max-w-7xl mx-auto">
-          {services.map((service, index) => {
-            const Icon = service.icon as any;
-            const delayClass = index === 0 ? "fade-up-delay-1" : index === 1 ? "fade-up-delay-2" : "fade-up-delay-3";
-            return (
 
-            // butonul mare cu efect de sticlă
-            <button 
-              key={service.id} 
-              onClick={() => onNavigate(service.id)} 
-              className={`liquidGlass-wrapper liquidGlass-card text-center ${delayClass} flex flex-col h-full`}
-            >
-              <div className="liquidGlass-effect" />
-              <div className="liquidGlass-tint" />
-              <div className="liquidGlass-shine" />
-              <div className="liquidGlass-content flex flex-col items-center w-full h-full">
-                <div className="flex-1 flex flex-col items-center justify-start w-full">
-                  <div className="flex justify-center mb-8">
-                    <div className={`card-icon w-24 h-24 bg-gradient-to-br ${service.color} rounded-2xl flex items-center justify-center shadow-xl`}>
-                      <Icon className="w-12 h-12 text-white" />
+        <div className="grid md:grid-cols-2 gap-8 max-w-7xl mx-auto">
+          {categories.map((cat, index) => {
+            const Icon = cat.icon as any;
+            const delayClass = `fade-up-delay-${index + 1}`;
+            
+            return (
+              <div key={cat.id} className={`liquidGlass-wrapper liquidGlass-card ${delayClass}`}>
+                <div className="liquidGlass-effect" />
+                <div className="liquidGlass-tint" />
+                <div className="liquidGlass-shine" />
+                <div className="liquidGlass-content">
+                  <div className="flex items-start gap-4 mb-6">
+                    <div className={`w-16 h-16 bg-gradient-to-br ${cat.color} rounded-2xl flex items-center justify-center shadow-xl flex-shrink-0`}>
+                      <Icon className="w-8 h-8 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-gray-800 mb-2">{cat.title}</h3>
+                      <p className="text-gray-600 text-sm">{cat.description}</p>
                     </div>
                   </div>
-                  <h3 className="text-2xl font-bold text-gray-800 mb-4">{service.title}</h3>
-                  <p className="text-gray-600 mb-4 leading-relaxed">{service.description}</p>
-                  <p className="text-xs text-gray-400 mb-6 font-mono">Endpoint: {service.endpoint}</p>
-                </div>
-              
-                {/* Buton Glass Blue */}
-                <div className="button-wrap button-wrap-blue w-full">
-                  <div className="button-shadow"></div>
-                  <button 
-                    type="button"
-                    className="glass-btn-blue w-full"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onNavigate(service.id);
-                    }}
-                  >
-                    <span>Selectează Serviciul</span>
-                  </button>
+
+                  <div className="space-y-2">
+                    {cat.subcategories.map((sub) => {
+                      const SubIcon = sub.icon as any;
+                      return (
+                        <button
+                          key={sub.id}
+                          onClick={() => onNavigate(sub.id)}
+                          className="w-full flex items-center gap-3 px-4 py-3 bg-white/60 hover:bg-white/80 border border-gray-200 hover:border-blue-300 rounded-xl transition-all duration-300 text-left group"
+                        >
+                          <SubIcon className="w-5 h-5 text-gray-600 group-hover:text-blue-600 transition-colors" />
+                          <span className="text-gray-800 font-medium group-hover:text-blue-600 transition-colors">{sub.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
-            </button>
             );
           })}
         </div>
@@ -337,998 +321,1155 @@ const HomeCards: React.FC<{ onNavigate: (page: string) => void; backendStatus: s
   );
 };
 
-// Pentru dropdown-urile cu efect de sticlă
-const GlassSelect: React.FC<{
-  value: string;
-  onChange: (value: string) => void;
-  options: { value: string; label: string }[];
-  label: string;
-}> = ({ value, onChange, options, label }) => {
-  const [isOpen, setIsOpen] = React.useState(false);
-  const [isClosing, setIsClosing] = React.useState(false);
-  const dropdownRef = React.useRef<HTMLDivElement>(null);
-  const selectedOption = options.find((opt) => opt.value === value);
+// ========== I.1 - PowerPoint Analysis ==========
+const PPTAnalysisPage: React.FC = () => {
+  const [file, setFile] = useState<File | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
 
-const startClose = React.useCallback(() => {
-  setIsClosing(true);
-  // asigurăm un reflow înainte să schimbăm clasa în `dropdown-exit`
-  requestAnimationFrame(() => setIsOpen(false));
-}, []);
-
-  // click în afara
-  React.useEffect(() => {
-    if (!isOpen) return;
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        startClose();
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [isOpen, startClose]);
-
-  // ESC pentru a închide
-  React.useEffect(() => {
-    if (!isOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") startClose();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [isOpen, startClose]);
-
-  return (
-    <div className="relative" ref={dropdownRef}>
-      <label className="block text-gray-700 font-medium mb-2">{label}</label>
-
-      <button
-        type="button"
-        aria-haspopup="listbox"
-        aria-expanded={isOpen}
-        onClick={() => (isOpen ? startClose() : setIsOpen(true))}
-
-        className="liquidGlass-wrapper rounded-2xl cursor-pointer w-full"
-        style={{ padding: 0 }}
-      >
-        <div className="liquidGlass-effect" />
-        <div className="liquidGlass-tint" />
-        <div className="liquidGlass-shine" />
-        <div className="liquidGlass-content w-full">
-          <div className="px-4 py-3 flex items-center justify-between font-medium text-gray-800">
-            <span>{selectedOption?.label}</span>
-            <svg
-              className={`w-4 h-4 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
-              viewBox="0 0 16 16"
-              aria-hidden="true"
-            >
-              <path d="M8 11L3 6h10z" fill="#3b82f6" />
-            </svg>
-          </div>
-        </div>
-      </button>
-
-      {(isOpen || isClosing) && (
-        <div
-          className={`absolute left-0 right-0 mt-2 z-50 liquidGlass-wrapper rounded-2xl shadow-2xl ${
-            isOpen ? "dropdown-enter" : "dropdown-exit"
-          }`}
-          style={{ padding: "0.5rem", maxHeight: "240px", overflow: "hidden" }}
-          onAnimationEnd={(e) => {
-            if (!isOpen && isClosing && e.animationName === "dropdownSlideUp") {
-              setIsClosing(false);   // dezmontăm doar DUPĂ ce se termină animația de urcare
-            }
-          }}
-          role="listbox"
-          aria-label={label}
-        >
-          <div className="liquidGlass-effect" />
-          <div className="liquidGlass-tint" />
-          <div className="liquidGlass-shine" />
-          <div className="liquidGlass-content h-full overflow-y-auto space-y-1" style={{ maxHeight: "230px" }}>
-            {options.map((option) => {
-              const active = option.value === value;
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  role="option"
-                  aria-selected={active}
-                  onClick={() => {
-                    onChange(option.value);
-                    startClose();
-                  }}
-                  className={`w-full px-4 py-3 text-left rounded-xl transition-all duration-200 font-medium ${
-                    active
-                      ? "bg-gradient-to-r from-blue-500 to-sky-500 text-white shadow-lg"
-                      : "hover:bg-blue-50/80 text-gray-800"
-                  }`}
-                >
-                  {option.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-
-// ================= Pagini =================
-const SummaryPage: React.FC<{ backendStatus: string }> = ({ backendStatus }) => {
-
-  const [files, setFiles] = useState<ProcessedFile[]>([]);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [mode, setMode] = useState<"summary" | "translation">("summary");
-  const [srcLang, setSrcLang] = useState<Lang>("en");
-  const [destLang, setDestLang] = useState<Lang>("ro");
-  const [detailLevel, setDetailLevel] = useState<number>(50);
-  const [youtubeLink, setYoutubeLink] = useState<string>("");
-
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [canSubmit, setCanSubmit] = useState(false);
-
-  // Verifică dacă se poate trimite (fie fișiere, fie link YouTube)
-  useEffect(() => {
-    const hasFiles = selectedFiles.length > 0;
-    const hasYoutubeLink = youtubeLink.trim().length > 0;
-    setCanSubmit(hasFiles || hasYoutubeLink);
-  }, [selectedFiles, youtubeLink]);
-
-  
-  //  FUNCȚIILE AICI
-  const removeFile = (fileId: string) => setFiles((prev) => prev.filter((f) => f.id !== fileId));
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const uploadedFiles = Array.from(e.target.files || []);
-    if (uploadedFiles.length === 0) return;
-    
-    setSelectedFiles(uploadedFiles);
-    setCanSubmit(true);
-    
-    console.log(`${uploadedFiles.length} fișiere selectate:`, uploadedFiles.map(f => f.name));
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setFile(e.target.files[0]);
+      setError(null);
+    }
   };
 
-  // FUNCȚIA TRIMITE (unificată pentru link + fișiere)
-const handleSubmit = async () => {
-  const isValidYouTube = (s: string) =>
-    /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\//i.test((s || '').trim());
-
-  if (isProcessing) return;
-
-  const hasFiles = selectedFiles.length > 0;
-  const hasValidLink = isValidYouTube(youtubeLink);
-
-  // dacă nu există nici fișiere, nici link valid => stop
-  if (!hasFiles && !hasValidLink) return;
-
-  // dacă sunt ambele selectate simultan => avertizare și stop, implementeaza avertizare mai frumoasa
-  if (hasFiles && hasValidLink) {
-    alert("⚠️ Poți trimite fie un fișier, fie un link YouTube — nu ambele simultan.");
-    return;
-  }
-  setIsProcessing(true);
-  setCanSubmit(false);
-
-  try {
-    // pregătim un formdata comun
-    const fd = new FormData();
-    fd.append("service", mode === "translation" ? "translation" : "summarize");
-    fd.append("src_lang", srcLang);
-    fd.append("dest_lang", destLang);
-    fd.append("detail_level", String(detailLevel));
-    if (hasValidLink) fd.append("youtube_link", youtubeLink.trim());
-    if (hasFiles) {
-      selectedFiles.forEach((file) => fd.append("file", file));
+  const handleUpload = async () => {
+    if (!file) {
+      setError('Selectează un fișier PPT/PPTX');
+      return;
     }
 
-    let result: any;
+    setLoading(true);
+    setError(null);
 
-    // apelăm API-ul real sau mock
-    if (backendStatus === "online") {
-      result = await realApi.summarizeOrTranslateDoc(
-        selectedFiles[0] || new File([], "empty.txt"),
-        mode,
-        srcLang,
-        destLang,
-        detailLevel,
-        hasValidLink ? youtubeLink.trim() : ""
-      );
-    } else {
-      if (mode === "summary") {
-        result = await mockApi.summarize(fd);
-      } else {
-        result = await mockApi.translateDoc(fd);
-      }
-    }
-
-    // construim un „file entry” generic pentru UI
-    const pseudoId = Math.random().toString(36).substr(2, 9);
-    const displayName =
-      hasFiles && selectedFiles.length > 0
-        ? selectedFiles[0].name
-        : youtubeLink.trim();
-    const pseudoFile: ProcessedFile = {
-      id: pseudoId,
-      name: displayName,
-      type: hasFiles ? selectedFiles[0].type : "text/uri-list",
-      status: "completed",
-      progress: 100,
-      result,
-      downloadUrl: result?.downloadUrl || result?.file_path,
-    };
-
-    setFiles((prev) => [...prev, pseudoFile]);
-    setSelectedFiles([]);
-  } catch (e: any) {
-    console.error(e);
-  } finally {
-    setIsProcessing(false);
-  }
-};
-
-  // BUTON ANULEAZĂ
-  const handleCancel = () => {
-    setSelectedFiles([]);
-    setCanSubmit(false);
-    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
-    if (fileInput) fileInput.value = "";
-    
-    console.log("Selecție anulată");
-  };
-
-  return (
-    
-    <div className="container mx-auto px-4 py-8 max-w-4xl">
-      <div className="liquidGlass-wrapper liquidGlass-card fade-up-delay-3 rounded-3xl mb-6 shadow-lg " style={{padding: '1.5rem'}}>
-        <div className="liquidGlass-effect" />
-        <div className="liquidGlass-tint" />
-        <div className="liquidGlass-shine" />
-        <div className="liquidGlass-content flex items-start gap-4">
-          <div className="bg-gradient-to-br from-blue-400 to-sky-400 w-16 h-16 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg"><FileText className="w-8 h-8 text-white" /></div>
-          <div className="flex-1">
-            <h2 className="text-2xl font-bold text-gray-800 mb-2">Rezumat / Traducere Document</h2>
-            <p className="text-gray-600 mb-2">Alege modul de procesare și încarcă documentul</p>
-            {/* <p className="text-xs text-gray-400 font-mono">Endpoints: POST /api/summarize sau POST /api/translation</p> */}
-          </div>
-        </div>
-      </div>
-
-      <div className="liquidGlass-wrapper liquidGlass-card rounded-3xl mb-6 shadow-lg fade-up-delay-1" style={{padding: '1.5rem'}}>
-        <div className="liquidGlass-effect" />
-        <div className="liquidGlass-tint" />
-        <div className="liquidGlass-shine" />
-        <div className="liquidGlass-content space-y-6">
-          
-          {/* Mod procesare */}
-          <fieldset className="space-y-3">
-            <legend id="mode-legend" className="block text-gray-700 font-medium">Mod procesare</legend>
-            <p id="mode-help" className="text-xs text-gray-500">Alege între <strong>Rezumat</strong> (sinteză rapidă) și <strong>Traducere integrală</strong> (păstrează conținutul complet).</p>
-            <div role="radiogroup" aria-labelledby="mode-legend" aria-describedby="mode-help" className="grid sm:grid-cols-2 gap-3">
-              <label className="cursor-pointer rounded-2xl border border-gray-200 bg-white/80 backdrop-blur px-4 py-3 shadow-sm hover:shadow transition-all duration-300 has-[:checked]:border-blue-400 has-[:checked]:bg-blue-50/50">
-                <div className="flex items-start gap-3">
-                  <input type="radio" name="mode" value="summary" checked={mode === "summary"} onChange={() => setMode("summary")} className="peer mt-1 h-4 w-4 rounded-full appearance-none bg-gray-300 checked:bg-blue-500 checked:shadow-[0_0_0_2px_rgba(59,130,246,0.3)_inset,0_0_4px_1px_rgba(59,130,246,0.4)] transition-all duration-300 checked:scale-70 cursor-pointer" />
-                  <div><div className="font-semibold text-gray-800">Rezumat</div></div>
-                </div>
-              </label>
-              <label className="cursor-pointer rounded-2xl border border-gray-200 bg-white/80 backdrop-blur px-4 py-3 shadow-sm hover:shadow transition-all duration-300 has-[:checked]:border-blue-400 has-[:checked]:bg-blue-50/50">
-                <div className="flex items-start gap-3">
-                  <input type="radio" name="mode" value="translation" checked={mode === "translation"} onChange={() => setMode("translation")} className="peer mt-1 h-4 w-4 rounded-full appearance-none bg-gray-300 checked:bg-blue-500 checked:shadow-[0_0_8px_2px_rgba(59,130,246,0.8)_inset,0_0_4px_1px_rgba(59,130,246,0.4)] transition-all duration-300 checked:scale-70 cursor-pointer" />
-                  <div><div className="font-semibold text-gray-800">Traducere integrală</div></div>
-                </div>
-              </label>
-            </div>
-          </fieldset>
-
-          {/* Limbi - grid 2 coloane */}
-          <div className="grid md:grid-cols-2 gap-6">
-            <GlassSelect
-              label="Limba documentului original"
-              value={srcLang}
-              onChange={(val) => setSrcLang(val as Exclude<Lang, "ro">)}
-              options={[
-                { value: "ro", label: "🇷🇴 Română (RO)" },
-                { value: "en", label: "🇬🇧 Engleză (EN)" },
-                { value: "zh", label: "🇨🇳 Chineză (ZH)" },
-                { value: "ru", label: "🇷🇺 Rusă (RU)" },
-                { value: "ja", label: "🇯🇵 Japoneză (JA)" }
-              ]}
-            />
-            
-            <GlassSelect
-              label="Limba țintă"
-              value={destLang}
-              onChange={(val) => setDestLang(val as Lang)}
-              options={[
-                { value: "ro", label: "🇷🇴 Română (RO)" },
-                { value: "en", label: "🇬🇧 Engleză (EN)" },
-                { value: "zh", label: "🇨🇳 Chineză (ZH)" },
-                { value: "ru", label: "🇷🇺 Rusă (RU)" },
-                { value: "ja", label: "🇯🇵 Japoneză (JA)" }
-              ]}
-            />
-          </div>
-
-          {/* Slider */}
-          <div>
-            <label className="block text-gray-700 font-medium mb-2">Nivel de detaliere al informațiilor</label>
-            <input type="range" min="1" max="100" step="1" value={detailLevel} onChange={(e) => setDetailLevel(Number(e.target.value))} className="w-full h-2 bg-gradient-to-r from-sky-300 via-blue-300 to-sky-400 rounded-lg appearance-none cursor-pointer accent-sky-600 transition-all duration-300" />
-            <div className="flex justify-between text-sm text-gray-500 mt-3 font-medium">
-              <span>Minim detaliat</span>
-              <span>Maxim detaliat</span>
-            </div>
-          </div>
-          
-        </div>
-      </div>
-
-      {/*Box incarcare docs */}
-      <div className="liquidGlass-wrapper liquidGlass-card rounded-3xl mb-6 shadow-lg fade-up-delay-2" style={{padding: '2rem'}}>
-        <div className="liquidGlass-effect" />
-        <div className="liquidGlass-tint" />
-        <div className="liquidGlass-shine" />
-        <div className="liquidGlass-content">
-          <div className="border-2 border-dashed border-sky-300 rounded-xl p-12 text-center hover:border-sky-400 hover:bg-sky-50/30 transition-all">
-            <Upload className="w-16 h-16 mx-auto text-sky-400 mb-4" />
-            <label className="cursor-pointer">
-              <span className="text-sky-600 text-lg font-semibold block mb-4">
-                Încarcă documente (.pdf, .doc, .docx, .txt, .ppt, .pptx, mp3, mp4)
-              </span>
-              <input 
-                type="file" 
-                accept=".pdf,.doc,.docx,.txt,.ppt,.pptx,.mp3,.mp4" 
-                multiple 
-                onChange={handleFileSelect} 
-                className="hidden" 
-                disabled={isProcessing} 
-              />
-              <span className={`inline-block px-6 py-3 bg-gradient-to-r from-blue-500 to-sky-500 text-white rounded-xl font-semibold transition-all shadow-md ${
-                isProcessing ? "opacity-50 cursor-not-allowed" : "hover:from-blue-600 hover:to-sky-600 hover:shadow-lg"
-              }`}>
-                Selectează Fișiere
-              </span>
-            </label>
-            
-            {selectedFiles.length > 0 && (
-              <div className="mt-6 p-4 bg-blue-50/50 rounded-xl border border-blue-200">
-                <p className="text-sm font-medium text-gray-700 mb-2">
-                  📎 {selectedFiles.length} fișier{selectedFiles.length > 1 ? 'e' : ''} selectat{selectedFiles.length > 1 ? 'e' : ''}:
-                </p>
-                <div className="space-y-1">
-                  {selectedFiles.map((file, idx) => (
-                    <p key={idx} className="text-xs text-gray-600">• {file.name}</p>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-            {/* INPUT LINK YOUTUBE */}
-      <div className="liquidGlass-wrapper liquidGlass-card rounded-2xl mb-5 shadow-md fade-up-delay-3" style={{padding: '1rem'}}>
-        <div className="liquidGlass-effect" />
-        <div className="liquidGlass-tint" />
-        <div className="liquidGlass-shine" />
-        <div className="liquidGlass-content">
-          <div className="border border-cyan-300 rounded-lg p-4 text-center hover:border-cyan-400 hover:bg-cyan-50/30 transition-all duration-300">
-            <input type="text" placeholder="Link YouTube" value={youtubeLink} onChange={(e) => setYoutubeLink(e.target.value)} className="w-full p-2 text-center text-cyan-600 bg-transparent border-none outline-none text-base font-medium placeholder-cyan-400 focus:placeholder-transparent transition-all" />
-          </div>
-        </div>
-      </div>
-
-      {/* BUTOANE TRIMITE / ANULEAZĂ */}
-      {canSubmit && !isProcessing && (
-        <div className="liquidGlass-wrapper liquidGlass-card rounded-2xl mb-6 shadow-lg fade-up" style={{padding: '1rem'}}>
-          <div className="liquidGlass-effect" />
-          <div className="liquidGlass-tint" />
-          <div className="liquidGlass-shine" />
-          <div className="liquidGlass-content flex gap-4">
-            {/* Buton Trimite - Glass Green */}
-            <div className="button-wrap button-wrap-green flex-1">
-              <div className="button-shadow"></div>
-              <button 
-                onClick={handleSubmit} 
-                disabled={isProcessing} 
-                className="glass-btn-green w-full"
-              >
-              <span className="flex items-center justify-center gap-2">
-                <CheckCircle className="w-5 h-5" />
-                {(() => {
-                  const hasFiles = selectedFiles.length > 0;
-                  const hasLink = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\//i.test((youtubeLink || '').trim());
-                  if (hasFiles && hasLink) return '⚠️ Alege doar fișier sau doar Link YouTube';
-                  if (hasFiles) return 'Trimite fișier';
-                  if (hasLink) return 'Trimite Link YouTube';
-                  return 'Adaugă fișier sau Link YouTube';
-                })()}
-              </span>
-
-              </button>
-            </div>
-            
-            {/* Buton Anulează - Glass Red */}
-            <div className="button-wrap button-wrap-red flex-1">
-              <div className="button-shadow"></div>
-              <button
-                onClick={handleCancel}
-                disabled={isProcessing}
-                className="glass-btn-red w-full"
-              >
-                <span className="flex items-center justify-center gap-2">
-                  <X className="w-5 h-5" />
-                  Anulează
-                </span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      {isProcessing && (
-        <div className="liquidGlass-wrapper rounded-3xl mb-6 shadow-lg fade-up" style={{padding: '1.5rem'}}>
-          <div className="liquidGlass-effect" />
-          <div className="liquidGlass-tint" />
-          <div className="liquidGlass-shine" />
-          <div className="liquidGlass-content">
-            <p className="text-sky-700 text-center font-medium">Procesare în curs...</p>
-          </div>
-        </div>
-      )}
-
-      {files.length > 0 && (
-        <div className="liquidGlass-wrapper rounded-3xl shadow-lg fade-up" style={{padding: '1.5rem'}}>
-          <div className="liquidGlass-effect" />
-          <div className="liquidGlass-tint" />
-          <div className="liquidGlass-shine" />
-          <div className="liquidGlass-content">
-            <h3 className="text-xl font-bold text-gray-800 mb-4">Fișiere Procesate ({files.length})</h3>
-            <div className="space-y-4">
-              {files.map((file) => (
-                <div key={file.id} className="liquidGlass-wrapper rounded-xl shadow-sm" style={{padding: '1rem'}}>
-                  <div className="liquidGlass-effect" />
-                  <div className="liquidGlass-tint" />
-                  <div className="liquidGlass-shine" />
-                  <div className="liquidGlass-content">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
-                        {file.status === "completed" && <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />}
-                        {file.status === "processing" && <Loader className="w-5 h-5 text-blue-500 animate-spin flex-shrink-0" />}
-                        {file.status === "error" && <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />}
-                        <span className="text-gray-800 font-medium truncate">{file.name}</span>
-                      </div>
-                      <button onClick={() => removeFile(file.id)} className="p-1 hover:bg-gray-200 rounded transition-colors"><X className="w-4 h-4 text-gray-500" /></button>
-                    </div>
-                    {file.status === "completed" && file.result && (
-                      <div className="mt-4 space-y-4">
-                        {mode === "summary" && file.result.summary && (
-                          <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                            <h4 className="text-sm font-semibold text-gray-800 mb-2">Rezumat:</h4>
-                            <p className="text-gray-700 text-sm">{file.result.summary}</p>
-                          </div>
-                        )}
-                        {file.status === "completed" && file.downloadUrl && mode === "translation" && (
-                          <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                            <h4 className="text-sm font-semibold text-gray-800 mb-2">✅ Traducere generată</h4>
-                            <a href={`${API_BASE_URL.replace(/\/api$/, '')}/download/${encodeURIComponent(file.downloadUrl)}`} className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-sky-500 text-white rounded-lg hover:from-blue-600 hover:to-sky-600 transition-all shadow-md text-sm font-medium">
-                              <Download className="w-4 h-4" /> Descarcă Traducerea
-                            </a>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    {file.status === "error" && (
-                      <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg"><p className="text-sm text-red-600">{file.error}</p></div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-
-const SubtitlesPage: React.FC<{ backendStatus: string }> = ({ backendStatus }) => {
-  const [files, setFiles] = useState<ProcessedFile[]>([]);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [srcLangSub, setSrcLangSub] = useState<Lang>("en");
-  const [destLangSub, setDestLangSub] = useState<Lang>("ro");
-  
-  // NOUĂ: State pentru opțiuni LLM
-  const [useLLMValidation, setUseLLMValidation] = useState(true);
-  const [useDoubleValidation, setUseDoubleValidation] = useState(false);
-  const [llmStatus, setLLMStatus] = useState<'checking' | 'online' | 'offline'>('checking');
-
-  // NOUĂ: Verificare status LLM la mount
-  useEffect(() => {
-    checkLLMStatus();
-  }, []);
-
-  const checkLLMStatus = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/llm-status`);
-      if (response.ok) {
-        const data = await response.json();
-        setLLMStatus(data.status === 'online' ? 'online' : 'offline');
-      } else {
-        setLLMStatus('offline');
-      }
-    } catch {
-      setLLMStatus('offline');
+      const data = await uploadFile('/ppt-analysis', file);
+      setResult(data);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
   };
-
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const uploadedFiles = Array.from(e.target.files || []); 
-    if (uploadedFiles.length === 0) return;
-    
-    const newFiles: ProcessedFile[] = uploadedFiles.map((file) => ({ 
-      id: Math.random().toString(36).substr(2, 9), 
-      name: file.name, 
-      type: file.type, 
-      status: "pending", 
-      progress: 0 
-    }));
-    
-    setFiles((prev) => [...prev, ...newFiles]); 
-    setIsProcessing(true);
-
-    for (const [index, file] of uploadedFiles.entries()) {
-      const fileId = newFiles[index].id;
-      try {
-        setFiles((prev) => prev.map((f) => 
-          (f.id === fileId ? { ...f, status: "processing", progress: 20 } : f)
-        ));
-        
-        let response: any;
-        if (backendStatus === "online") {
-          // MODIFICAT: Trimite parametrii LLM
-          const formData = new FormData();
-          formData.append("file", file);
-          formData.append("service", "video-subtitle");
-          formData.append("src_lang", srcLangSub);
-          formData.append("dest_lang", destLangSub);
-          formData.append("use_llm", String(useLLMValidation));
-          formData.append("double_validation", String(useDoubleValidation));
-          
-          const apiResponse = await fetch(`${API_BASE_URL}/subtitles`, {
-            method: "POST",
-            body: formData
-          });
-          
-          if (!apiResponse.ok) {
-            throw new Error("Processing failed");
-          }
-          
-          response = await apiResponse.json();
-        } else {
-          // Mock pentru demo
-          const fd = new FormData();
-          fd.append("file", file);
-          fd.append("service", "subtitles");
-          fd.append("src_lang", srcLangSub);
-          fd.append("dest_lang", destLangSub);
-          response = await mockApi.subtitles(fd);
-        }
-
-        // Update cu informații despre validare
-        setFiles((prev) => prev.map((f) => 
-          (f.id === fileId ? { 
-            ...f, 
-            status: "completed", 
-            progress: 100, 
-            result: {
-              ...response,
-              llmValidated: response.llmValidated || false,
-              doubleValidated: response.doubleValidated || false,
-              preview: response.preview || []
-            }, 
-            downloadUrl: response.downloadUrl 
-          } : f)
-        ));
-      } catch (error: any) {
-        setFiles((prev) => prev.map((f) => 
-          (f.id === fileId ? { 
-            ...f, 
-            status: "error", 
-            progress: 0, 
-            error: error.message || "Processing failed" 
-          } : f)
-        ));
-      }
-    }
-
-    setIsProcessing(false); 
-    e.target.value = "";
-  };
-
-  const removeFile = (fileId: string) => setFiles((prev) => prev.filter((f) => f.id !== fileId));
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
-      {/* Header cu informații despre subtitrare */}
       <div className="liquidGlass-wrapper liquidGlass-card rounded-3xl mb-6 shadow-lg fade-up" style={{padding: '1.5rem'}}>
         <div className="liquidGlass-effect" />
         <div className="liquidGlass-tint" />
         <div className="liquidGlass-shine" />
-        <div className="liquidGlass-content flex items-start gap-4">
-          <div className="bg-gradient-to-br from-blue-400 to-sky-400 w-16 h-16 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg">
-            <Subtitles className="w-8 h-8 text-white" />
-          </div>
-          <div className="flex-1">
-            <h2 className="text-2xl font-bold text-gray-800 mb-2">Subtitrare Video Inteligentă</h2>
-            <p className="text-gray-600 mb-2">Transcriere și traducere cu validare AI avansată</p>
-            
-            {/* NOUĂ: Status LLM */}
-            <div className="flex items-center gap-4 mt-3">
-              <div className={`flex items-center gap-2 px-3 py-1 rounded-lg ${
-                llmStatus === 'online' ? 'bg-green-100 text-green-700' : 
-                llmStatus === 'offline' ? 'bg-red-100 text-red-700' : 
-                'bg-yellow-100 text-yellow-700'
-              }`}>
-                <div className={`w-2 h-2 rounded-full ${
-                  llmStatus === 'online' ? 'bg-green-500 animate-pulse' : 
-                  llmStatus === 'offline' ? 'bg-red-500' : 
-                  'bg-yellow-500 animate-pulse'
-                }`} />
-                <span className="text-xs font-medium">
-                  Validare LLM: {
-                    llmStatus === 'online' ? 'Disponibilă' : 
-                    llmStatus === 'offline' ? 'Indisponibilă' : 
-                    'Verificare...'
-                  }
-                </span>
-              </div>
-              <p className="text-xs text-gray-400 font-mono">Endpoint: /api/subtitles</p>
+        <div className="liquidGlass-content">
+          <div className="flex items-start gap-4">
+            <div className="bg-gradient-to-br from-blue-400 to-sky-400 w-16 h-16 rounded-xl flex items-center justify-center shadow-lg">
+              <Presentation className="w-8 h-8 text-white" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-gray-800 mb-2">I.1 - Analiză PowerPoint</h2>
+              <p className="text-gray-600 mb-2">Extrage și stochează slide-uri, paragrafe, bullet points și imagini</p>
+              <p className="text-xs text-gray-400 font-mono">Endpoint: POST /api/ppt-analysis</p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Setări limbi */}
-      <div className="liquidGlass-wrapper liquidGlass-card rounded-3xl mb-6 shadow-lg grid md:grid-cols-2 gap-6 fade-up-delay-1" style={{padding: '1.5rem'}}>
-        <div className="liquidGlass-effect" />
-        <div className="liquidGlass-tint" />
-        <div className="liquidGlass-shine" />
-        <div className="liquidGlass-content grid md:grid-cols-2 gap-6 w-full">
-          <GlassSelect
-            label="Limba sursă (auto-detectare disponibilă)"
-            value={srcLangSub}
-            onChange={(val) => setSrcLangSub(val as Lang)}
-            options={[
-              { value: "auto", label: "🔍 Auto-detectare" },
-              { value: "ro", label: "🇷🇴 Română (RO)" },
-              { value: "en", label: "🇬🇧 Engleză (EN)" },
-              { value: "zh", label: "🇨🇳 Chineză (ZH)" },
-              { value: "ru", label: "🇷🇺 Rusă (RU)" },
-              { value: "ja", label: "🇯🇵 Japoneză (JA)" }
-            ]}
-          />
-          
-          <GlassSelect
-            label="Limba țintă"
-            value={destLangSub}
-            onChange={(val) => setDestLangSub(val as Lang)}
-            options={[
-              { value: "ro", label: "🇷🇴 Română (RO)" },
-              { value: "en", label: "🇬🇧 Engleză (EN)" },
-              { value: "zh", label: "🇨🇳 Chineză (ZH)" },
-              { value: "ru", label: "🇷🇺 Rusă (RU)" },
-              { value: "ja", label: "🇯🇵 Japoneză (JA)" }
-            ]}
-          />
-        </div>
-      </div>
-
-      {/* NOUĂ: Opțiuni validare LLM */}
-      {llmStatus === 'online' && (
-        <div className="liquidGlass-wrapper liquidGlass-card rounded-3xl mb-6 shadow-lg fade-up-delay-2" style={{padding: '1.5rem'}}>
-          <div className="liquidGlass-effect" />
-          <div className="liquidGlass-tint" />
-          <div className="liquidGlass-shine" />
-          <div className="liquidGlass-content">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">🤖 Opțiuni Validare AI</h3>
-            
-            <div className="space-y-3">
-              <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg hover:bg-blue-50/50 transition-colors">
-                <input
-                  type="checkbox"
-                  checked={useLLMValidation}
-                  onChange={(e) => setUseLLMValidation(e.target.checked)}
-                  className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-                <div>
-                  <div className="font-medium text-gray-800">Validare cu LLM (Gemma3 27B)</div>
-                  <div className="text-sm text-gray-600">Îmbunătățește calitatea traducerilor folosind AI avansat</div>
-                </div>
-              </label>
-              
-              {useLLMValidation && (
-                <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg hover:bg-blue-50/50 transition-colors ml-8">
-                  <input
-                    type="checkbox"
-                    checked={useDoubleValidation}
-                    onChange={(e) => setUseDoubleValidation(e.target.checked)}
-                    className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <div>
-                    <div className="font-medium text-gray-800">Validare dublă (Gemma3 + Mistral)</div>
-                    <div className="text-sm text-gray-600">Verificare încrucișată pentru acuratețe maximă</div>
-                  </div>
-                </label>
-              )}
-            </div>
-            
-            {useLLMValidation && (
-              <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <p className="text-sm text-blue-700">
-                  ℹ️ Validarea LLM poate crește timpul de procesare cu ~30-50%, dar îmbunătățește 
-                  semnificativ calitatea traducerilor, în special pentru limbi asiatice.
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Upload video */}
-      <div className="liquidGlass-wrapper liquidGlass-card rounded-3xl mb-6 shadow-lg fade-up-delay-3" style={{padding: '2rem'}}>
+      <div className="liquidGlass-wrapper liquidGlass-card rounded-3xl shadow-lg fade-up-delay-2" style={{padding: '2rem'}}>
         <div className="liquidGlass-effect" />
         <div className="liquidGlass-tint" />
         <div className="liquidGlass-shine" />
         <div className="liquidGlass-content">
-          <div className="border-2 border-dashed border-gray-300 rounded-xl p-12 text-center hover:border-blue-400 hover:bg-blue-50/50 transition-all">
-            <Upload className="w-16 h-16 mx-auto text-gray-400 mb-4" />
-            <label className="cursor-pointer">
-              <span className="text-xl font-semibold text-gray-800 block mb-2">Încarcă Video</span>
-              <span className="text-gray-500 text-sm block mb-4">Formate acceptate: MP4, WebM, AVI, MOV</span>
-              <input 
-                type="file" 
-                accept="video/mp4,video/webm,video/avi,video/quicktime" 
-                multiple 
-                onChange={handleFileUpload} 
-                className="hidden" 
-                disabled={isProcessing} 
-              />
-              <span className={`inline-block px-6 py-3 bg-gradient-to-r from-blue-500 to-sky-500 text-white rounded-xl font-semibold transition-all shadow-md ${
-                isProcessing ? "opacity-50 cursor-not-allowed" : "hover:from-blue-600 hover:to-sky-600 hover:shadow-lg"
-              }`}>
-                {isProcessing ? "Procesare..." : "Selectează Video"}
-              </span>
-            </label>
+          <div className="border-2 border-dashed border-blue-300 rounded-xl p-12 text-center">
+            <Upload className="w-16 h-16 mx-auto text-blue-400 mb-4" />
+            <p className="text-gray-600 mb-4">Încarcă fișiere PowerPoint (.ppt, .pptx)</p>
+            
+            <input
+              type="file"
+              accept=".ppt,.pptx"
+              onChange={handleFileChange}
+              className="hidden"
+              id="ppt-file-input"
+            />
+            
+            <div className="button-wrap button-wrap-blue" style={{ display: 'inline-block' }}>
+              <div className="button-shadow"></div>
+              <button 
+                className="glass-btn-blue"
+                onClick={() => document.getElementById('ppt-file-input')?.click()}
+                type="button"
+              >
+                <span>{file ? `📄 ${file.name}` : 'Selectează Fișier PPT/PPTX'}</span>
+              </button>
+            </div>
+
+            {file && (
+              <button
+                onClick={handleUpload}
+                disabled={loading}
+                className="mt-4 px-6 py-3 bg-gradient-to-r from-blue-500 to-sky-500 text-white rounded-xl font-medium hover:shadow-lg transition-all disabled:opacity-50"
+              >
+                {loading ? 'Se procesează...' : '📤 Încarcă și Analizează'}
+              </button>
+            )}
+
+            {error && (
+              <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-600">
+                {error}
+              </div>
+            )}
+
+            {result && (
+              <div className="mt-6 p-6 bg-green-50 border border-green-200 rounded-xl text-left">
+                <h3 className="font-bold text-green-800 mb-3">✅ Analiză completă!</h3>
+                <div className="space-y-2 text-sm text-gray-700">
+                  <p><strong>Fișier:</strong> {result.originalFile}</p>
+                  {result.totalSlides && <p><strong>Slide-uri:</strong> {result.totalSlides}</p>}
+                  {result.totalParagraphs && <p><strong>Paragrafe:</strong> {result.totalParagraphs}</p>}
+                </div>
+                {result.downloadUrl && (
+                  <a
+                    href={`http://localhost:5000/download/${result.downloadUrl}`}
+                    className="mt-4 inline-block px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                    download
+                  >
+                    📥 Descarcă Rezultat
+                  </a>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
-
-      {/* Lista fișierelor procesate - MODIFICAT pentru a afișa info despre validare */}
-      {files.length > 0 && (
-        <div className="liquidGlass-wrapper liquidGlass-card rounded-3xl shadow-lg fade-up" style={{padding: '1.5rem'}}>
-          <div className="liquidGlass-effect" />
-          <div className="liquidGlass-tint" />
-          <div className="liquidGlass-shine" />
-          <div className="liquidGlass-content">
-            <h3 className="text-xl font-bold text-gray-800 mb-4">Videoclipuri Procesate ({files.length})</h3>
-            <div className="space-y-4">
-              {files.map((file) => (
-                <div key={file.id} className="liquidGlass-wrapper rounded-xl shadow-sm" style={{padding: '1rem'}}>
-                  <div className="liquidGlass-effect" />
-                  <div className="liquidGlass-tint" />
-                  <div className="liquidGlass-shine" />
-                  <div className="liquidGlass-content">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
-                        {file.status === "completed" && <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />}
-                        {file.status === "processing" && <Loader className="w-5 h-5 text-blue-500 animate-spin flex-shrink-0" />}
-                        {file.status === "error" && <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />}
-                        <span className="text-gray-800 font-medium truncate">{file.name}</span>
-                      </div>
-                      <button onClick={() => removeFile(file.id)} className="p-1 hover:bg-gray-200 rounded transition-colors">
-                        <X className="w-4 h-4 text-gray-500" />
-                      </button>
-                    </div>
-                    
-                    {file.status === "processing" && (
-                      <div className="mb-3">
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div className="bg-gradient-to-r from-blue-500 to-sky-500 h-2 rounded-full transition-all duration-500" 
-                            style={{ width: `${file.progress}%` }} />
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1">{file.progress}% completat</p>
-                      </div>
-                    )}
-                    
-                    {file.status === "completed" && file.result && (
-                      <div className="mt-4 space-y-3">
-                        <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                          <h4 className="text-sm font-semibold text-gray-800 mb-2">✅ Subtitrare completă!</h4>
-                          
-                          {/* Info despre validare */}
-                          {file.result.llmValidated && (
-                            <div className="flex items-center gap-2 mb-2">
-                              <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-medium">
-                                🤖 Validat LLM
-                              </span>
-                              {file.result.doubleValidated && (
-                                <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs font-medium">
-                                  ✅✅ Validare dublă
-                                </span>
-                              )}
-                            </div>
-                          )}
-                          
-                          <p className="text-sm text-gray-700 mb-1">
-                            Limbi: {file.result.originalLanguage?.toUpperCase()} → {file.result.targetLanguage?.toUpperCase()}
-                          </p>
-                          <p className="text-sm text-gray-700 mb-3">
-                            Segmente: {file.result.totalSegments}
-                          </p>
-                          
-                          {/* Preview subtitrări dacă există */}
-                          {file.result.preview && file.result.preview.length > 0 && (
-                            <div className="mb-3 p-2 bg-white/50 rounded border border-blue-100">
-                              <p className="text-xs font-semibold text-gray-700 mb-1">Preview:</p>
-                              <div className="text-xs text-gray-600 font-mono">
-                                {file.result.preview.slice(0, 3).map((line: string, i: number) => (
-                                  <div key={i}>{line}</div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                          
-                          {file.downloadUrl && (
-                            <a 
-                              href={`${API_BASE_URL.replace(/\/api$/, '')}/download/${encodeURIComponent(file.downloadUrl)}`}
-                              download 
-                              className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-sky-500 text-white rounded-lg hover:from-blue-600 hover:to-sky-600 transition-all shadow-md text-sm font-medium"
-                            >
-                              <Download className="w-4 h-4" /> 
-                              Descarcă Subtitrare
-                            </a>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                    
-                    {file.status === "error" && (
-                      <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg">
-                        <p className="text-sm text-red-600">{file.error}</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
 
+// ========== I.2 - Document Analysis ==========
+const WordPDFAnalysisPage: React.FC = () => {
+  const [file, setFile] = useState<File | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
 
-const DubbingPage: React.FC<{ backendStatus: string }> = ({ backendStatus }) => {
-  const [files, setFiles] = useState<ProcessedFile[]>([]);
-  const [isProcessing, setIsProcessing] = useState(false);
-
-  const pollStatus = async (jobId: string): Promise<JobStatus> => mockApi.getStatus(jobId);
-
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const uploadedFiles = Array.from(e.target.files || []); if (uploadedFiles.length === 0) return;
-    const newFiles: ProcessedFile[] = uploadedFiles.map((file) => ({ id: Math.random().toString(36).substr(2, 9), name: file.name, type: file.type, status: "pending", progress: 0 }));
-    setFiles((prev) => [...prev, ...newFiles]); setIsProcessing(true);
-    for (const [index, file] of uploadedFiles.entries()) {
-      const fileId = newFiles[index].id;
-      try {
-        setFiles((prev) => prev.map((f) => (f.id === fileId ? { ...f, status: "processing", progress: 20 } : f)));
-        let response: any;
-        if (backendStatus === "online") {
-          response = await realApi.createDubbing(file);
-        } else {
-          const fd = new FormData();
-          fd.append("file", file);
-          response = await mockApi.dubbing();
-        }
-        if (response.jobId) {
-          setFiles((prev) => prev.map((f) => (f.id === fileId ? { ...f, progress: 50 } : f)));
-          const status = await pollStatus(response.jobId);
-          setFiles((prev) => prev.map((f) => (f.id === fileId ? { ...f, status: "completed", progress: 100, result: { jobId: response.jobId, ...status }, downloadUrl: status.resultUrl } : f)));
-        } else {
-          setFiles((prev) => prev.map((f) => (f.id === fileId ? { ...f, status: "completed", progress: 100, result: response, downloadUrl: response?.downloadUrl || response?.file_path } : f)));
-        }
-      } catch (error: any) {
-        setFiles((prev) => prev.map((f) => (f.id === fileId ? { ...f, status: "error", progress: 0, error: error.message || "Processing failed" } : f)));
-      }
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setFile(e.target.files[0]);
+      setError(null);
     }
-    setIsProcessing(false); e.target.value = "";
   };
 
-  const removeFile = (fileId: string) => setFiles((prev) => prev.filter((f) => f.id !== fileId));
+  const handleUpload = async () => {
+    if (!file) return;
+    setLoading(true);
+    setError(null);
+
+    try {
+      const data = await uploadFile('/document-analysis', file);
+      setResult(data);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
-      <div className="bg-white/80 backdrop-blur-sm border border-white/60 rounded-3xl p-6 mb-6 shadow-lg fade-up">
-        <div className="flex items-start gap-4">
-          <div className="bg-gradient-to-br from-blue-400 to-sky-400 w-16 h-16 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg"><Video className="w-8 h-8 text-white" /></div>
-          <div className="flex-1">
-            <h2 className="text-2xl font-bold text-gray-800 mb-2">Dublare Video</h2>
-            <p className="text-gray-600 mb-2">Dublează videoclipuri cu voci AI naturale</p>
-            <p className="text-xs text-gray-400 font-mono">Backend Endpoint: POST /api/dubbing</p>
+      <div className="liquidGlass-wrapper liquidGlass-card rounded-3xl mb-6 shadow-lg fade-up" style={{padding: '1.5rem'}}>
+        <div className="liquidGlass-effect" />
+        <div className="liquidGlass-tint" />
+        <div className="liquidGlass-shine" />
+        <div className="liquidGlass-content">
+          <div className="flex items-start gap-4">
+            <div className="bg-gradient-to-br from-blue-400 to-sky-400 w-16 h-16 rounded-xl flex items-center justify-center shadow-lg">
+              <FileType className="w-8 h-8 text-white" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-gray-800 mb-2">I.2 - Analiză Word/PDF/eBook</h2>
+              <p className="text-gray-600 mb-2">Extrage paragrafe cu asocieri: pagină, capitol, document, imagini</p>
+              <p className="text-xs text-gray-400 font-mono">Endpoint: POST /api/document-analysis</p>
+            </div>
           </div>
         </div>
       </div>
-      
-      <div className="bg-white/80 backdrop-blur-sm border border-white/60 rounded-3xl p-8 mb-6 shadow-lg fade-up-delay-1">
-        <div className="border-2 border-dashed border-gray-300 rounded-xl p-12 text-center hover:border-sky-400 hover:bg-sky-50/50 transition-all">
-          <Upload className="w-16 h-16 mx-auto text-gray-400 mb-4" />
-          <label className="cursor-pointer">
-            <span className="text-xl font-semibold text-gray-800 block mb-2">Încarcă Video</span>
-            <span className="text-gray-500 text-sm block mb-4">Formate acceptate: MP4, WebM, AVI, MOV</span>
-            <input type="file" accept="video/mp4,video/webm,video/avi,video/quicktime" multiple onChange={handleFileUpload} className="hidden" disabled={isProcessing} />
-            <span className={`inline-block px-6 py-3 bg-gradient-to-r from-blue-500 to-sky-500 text-white rounded-xl font-semibold transition-all shadow-md ${isProcessing ? "opacity-50 cursor-not-allowed" : "hover:from-blue-600 hover:to-sky-600 hover:shadow-lg"}`}>{isProcessing ? "Procesare..." : "Selectează Video"}</span>
-          </label>
-        </div>
-      </div>
-      
-      {files.length > 0 && (
-        <div className="bg-white/80 backdrop-blur-sm border border-white/60 rounded-3xl p-6 shadow-lg fade-up-delay-2">
-          <h3 className="text-xl font-bold text-gray-800 mb-4">Videoclipuri Procesate ({files.length})</h3>
-          <div className="space-y-4">
-            {files.map((file) => (
-              <div key={file.id} className="bg-gradient-to-r from-gray-50 to-gray-100 border border-gray-200 rounded-xl p-4 shadow-sm">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                    {file.status === "completed" && <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />}
-                    {file.status === "processing" && <Loader className="w-5 h-5 text-blue-500 animate-spin flex-shrink-0" />}
-                    {file.status === "error" && <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />}
-                    <span className="text-gray-800 font-medium truncate">{file.name}</span>
-                  </div>
-                  <button onClick={() => removeFile(file.id)} className="p-1 hover:bg-gray-200 rounded transition-colors"><X className="w-4 h-4 text-gray-500" /></button>
+
+      <div className="liquidGlass-wrapper liquidGlass-card rounded-3xl shadow-lg fade-up-delay-2" style={{padding: '2rem'}}>
+        <div className="liquidGlass-effect" />
+        <div className="liquidGlass-tint" />
+        <div className="liquidGlass-shine" />
+        <div className="liquidGlass-content">
+          <div className="border-2 border-dashed border-blue-300 rounded-xl p-12 text-center">
+            <Upload className="w-16 h-16 mx-auto text-blue-400 mb-4" />
+            <p className="text-gray-600 mb-4">Încarcă documente (.doc, .docx, .pdf, .epub)</p>
+
+            <input
+              type="file"
+              accept=".doc,.docx,.pdf,.epub"
+              onChange={handleFileChange}
+              className="hidden"
+              id="doc-file-input"
+            />
+
+            <div className="button-wrap button-wrap-blue" style={{ display: 'inline-block' }}>
+              <div className="button-shadow"></div>
+              <button 
+                className="glass-btn-blue"
+                onClick={() => document.getElementById('doc-file-input')?.click()}
+                type="button"
+              >
+                <span>{file ? `📄 ${file.name}` : 'Selectează Document'}</span>
+              </button>
+            </div>
+
+            {file && (
+              <button
+                onClick={handleUpload}
+                disabled={loading}
+                className="mt-4 px-6 py-3 bg-gradient-to-r from-blue-500 to-sky-500 text-white rounded-xl font-medium hover:shadow-lg transition-all disabled:opacity-50"
+              >
+                {loading ? 'Se procesează...' : '📤 Analizează Document'}
+              </button>
+            )}
+
+            {error && <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-600">{error}</div>}
+            
+            {result && (
+              <div className="mt-6 p-6 bg-green-50 border border-green-200 rounded-xl text-left">
+                <h3 className="font-bold text-green-800 mb-3">✅ Analiză completă!</h3>
+                <div className="space-y-2 text-sm text-gray-700">
+                  <p><strong>Fișier:</strong> {result.originalFile}</p>
+                  {result.totalPages && <p><strong>Pagini:</strong> {result.totalPages}</p>}
+                  {result.totalParagraphs && <p><strong>Paragrafe:</strong> {result.totalParagraphs}</p>}
                 </div>
-                {file.status === "processing" && (
-                  <div className="mb-3">
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div className="bg-gradient-to-r from-blue-500 to-sky-500 h-2 rounded-full transition-all duration-500" style={{ width: `${file.progress}%` }} />
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">{file.progress}% completat</p>
-                  </div>
-                )}
-                {file.status === "completed" && file.result && (
-                  <div className="mt-4 space-y-3">
-                    <div className="p-4 bg-sky-50 border border-sky-200 rounded-lg">
-                      <h4 className="text-sm font-semibold text-gray-800 mb-2">✅ Dublare completă!</h4>
-                      <p className="text-sm text-gray-700 mb-3">Job ID: {file.result.jobId}</p>
-                      {file.downloadUrl && (
-                        <a href={file.downloadUrl} download className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-sky-500 text-white rounded-lg hover:from-blue-600 hover:to-sky-600 transition-all shadow-md text-sm font-medium">
-                          <Download className="w-4 h-4" />Descarcă Video Dublat
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                )}
-                {file.status === "error" && (
-                  <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg"><p className="text-sm text-red-600">{file.error}</p></div>
+                {result.downloadUrl && (
+                  <a
+                    href={`http://localhost:5000/download/${result.downloadUrl}`}
+                    className="mt-4 inline-block px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                    download
+                  >
+                    📥 Descarcă Rezultat
+                  </a>
                 )}
               </div>
-            ))}
+            )}
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 };
 
-// ================= App (root) =================
+// ========== I.3 - Image OCR ==========
+const ImageOCRPage: React.FC = () => {
+  const [file, setFile] = useState<File | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setFile(e.target.files[0]);
+      setError(null);
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!file) return;
+    setLoading(true);
+    setError(null);
+
+    try {
+      const data = await uploadFile('/image-ocr', file);
+      setResult(data);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="container mx-auto px-4 py-8 max-w-4xl">
+      <div className="liquidGlass-wrapper liquidGlass-card rounded-3xl mb-6 shadow-lg fade-up" style={{padding: '1.5rem'}}>
+        <div className="liquidGlass-effect" />
+        <div className="liquidGlass-tint" />
+        <div className="liquidGlass-shine" />
+        <div className="liquidGlass-content">
+          <div className="flex items-start gap-4">
+            <div className="bg-gradient-to-br from-blue-400 to-sky-400 w-16 h-16 rounded-xl flex items-center justify-center shadow-lg">
+              <ImageIcon className="w-8 h-8 text-white" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-gray-800 mb-2">I.3 - Extragere Text din Imagini (OCR)</h2>
+              <p className="text-gray-600 mb-2">OCR inteligent: Tesseract / TrOCR / Surya</p>
+              <p className="text-xs text-gray-400 font-mono">Endpoint: POST /api/image-ocr</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="liquidGlass-wrapper liquidGlass-card rounded-3xl shadow-lg fade-up-delay-2" style={{padding: '2rem'}}>
+        <div className="liquidGlass-effect" />
+        <div className="liquidGlass-tint" />
+        <div className="liquidGlass-shine" />
+        <div className="liquidGlass-content">
+          <div className="border-2 border-dashed border-blue-300 rounded-xl p-12 text-center">
+            <Upload className="w-16 h-16 mx-auto text-blue-400 mb-4" />
+            <p className="text-gray-600 mb-4">Încarcă imagini (.jpg, .png, .tiff)</p>
+
+            <input
+              type="file"
+              accept=".jpg,.jpeg,.png,.tiff,.bmp"
+              onChange={handleFileChange}
+              className="hidden"
+              id="img-file-input"
+            />
+
+            <div className="button-wrap button-wrap-blue" style={{ display: 'inline-block' }}>
+              <div className="button-shadow"></div>
+              <button 
+                className="glass-btn-blue"
+                onClick={() => document.getElementById('img-file-input')?.click()}
+                type="button"
+              >
+                <span>{file ? `📄 ${file.name}` : 'Selectează Imagine'}</span>
+              </button>
+            </div>
+
+            {file && (
+              <button
+                onClick={handleUpload}
+                disabled={loading}
+                className="mt-4 px-6 py-3 bg-gradient-to-r from-blue-500 to-sky-500 text-white rounded-xl font-medium hover:shadow-lg transition-all disabled:opacity-50"
+              >
+                {loading ? 'Procesare OCR...' : '📤 Extrage Text'}
+              </button>
+            )}
+
+            {error && <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-600">{error}</div>}
+            
+            {result && (
+              <div className="mt-6 p-6 bg-green-50 border border-green-200 rounded-xl text-left">
+                <h3 className="font-bold text-green-800 mb-3">✅ OCR completat!</h3>
+                <div className="space-y-2 text-sm text-gray-700">
+                  <p><strong>Fișier:</strong> {result.originalFile}</p>
+                  {result.extractedText && <p><strong>Text extras:</strong> {result.extractedText.substring(0, 200)}...</p>}
+                  {result.detectedLanguage && <p><strong>Limbă detectată:</strong> {result.detectedLanguage}</p>}
+                </div>
+                {result.downloadUrl && (
+                  <a
+                    href={`http://localhost:5000/download/${result.downloadUrl}`}
+                    className="mt-4 inline-block px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                    download
+                  >
+                    📥 Descarcă Text
+                  </a>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ========== II.1 - Translate Documents ==========
+const TranslateDocsPage: React.FC = () => {
+  const [file, setFile] = useState<File | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setFile(e.target.files[0]);
+      setError(null);
+      setResult(null); // Resetează rezultatul la fișier nou
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!file) return;
+    setLoading(true);
+    setError(null);
+    setResult(null);
+
+    try {
+      const data = await uploadFile('/translate-document', file); 
+      setResult(data);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="container mx-auto px-4 py-8 max-w-4xl">
+      {/* Cardul de titlu */}
+      <div className="liquidGlass-wrapper liquidGlass-card rounded-3xl mb-6 shadow-lg fade-up" style={{padding: '1.5rem'}}>
+        <div className="liquidGlass-effect" />
+        <div className="liquidGlass-tint" />
+        <div className="liquidGlass-shine" />
+        <div className="liquidGlass-content">
+          <div className="flex items-start gap-4">
+            <div className="bg-gradient-to-br from-purple-400 to-pink-400 w-16 h-16 rounded-xl flex items-center justify-center shadow-lg">
+              <FileText className="w-8 h-8 text-white" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-gray-800 mb-2">II.1 - Traducere Documente Scrise</h2>
+              <p className="text-gray-600 mb-2">Traducere completă EN/ZH/RU/JA → RO</p>
+              <p className="text-xs text-gray-400 font-mono">Endpoint: POST /api/translate-document</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Cardul de upload */}
+      <div className="liquidGlass-wrapper liquidGlass-card rounded-3xl shadow-lg fade-up-delay-2" style={{padding: '2rem'}}>
+        <div className="liquidGlass-effect" />
+        <div className="liquidGlass-tint" />
+        <div className="liquidGlass-shine" />
+        <div className="liquidGlass-content">
+          <div className="border-2 border-dashed border-purple-300 rounded-xl p-12 text-center">
+            <Upload className="w-16 h-16 mx-auto text-purple-400 mb-4" />
+            
+            <p className="text-gray-600 mb-4">Încarcă documente (.pdf, .docx, .pptx)</p>
+
+            <input
+              type="file"
+              accept=".pdf,.docx,.pptx"
+              onChange={handleFileChange}
+              className="hidden"
+              id="translate-doc-input"
+            />
+
+            {/* Container vertical pentru butoane */}
+            <div className="flex flex-col items-center gap-4  max-w-md mx-auto">
+
+              {/* --- Buton 1: Selectare Fișier --- */}
+              <div className="button-wrap button-wrap-blue w-full">
+                <div className="button-shadow"></div>
+                <button 
+                  className="glass-btn glass-btn-blue w-full"
+                  onClick={() => document.getElementById('translate-doc-input')?.click()}
+                  type="button"
+                >
+                  <span className="truncate">{file ? `📄 ${file.name}` : 'Selectează Document'}</span>
+                </button>
+              </div>
+
+              {/* --- Buton 2: Traducere --- */}
+              {file && (
+                <div className="button-wrap button-wrap-purple w-full">
+                  <div className="button-shadow"></div>
+                  <button
+                    onClick={handleUpload}
+                    disabled={loading}
+                    className="glass-btn glass-btn-purple w-full"
+                  >
+                    {/* <Upload className="w-5 h-5 flex-shrink-0" /> */}
+                    <span className="truncate">{loading ? 'Traducere în curs...' : 'Tradu in RO'}</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {error && <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-600">{error}</div>}
+            
+            {/* --- Card Rezultat --- */}
+            {result && (
+              <div className="mt-6 p-6 rounded-2xl text-left shadow-lg 
+                            bg-green-600/10 border border-green-500/30 
+                            backdrop-blur-lg">
+                <h3 className="font-bold text-green-800 mb-3">✅ Traducere completă!</h3>
+                <div className="space-y-2 text-sm text-gray-700">
+                  <p><strong>Fișier original:</strong> {result.originalFile}</p>
+                  <p><strong>Limba originală:</strong> {result.originalLanguage}</p>
+                  <p><strong>Limba tradusă:</strong> {result.translatedLanguage}</p>
+                </div>
+
+                {/* --- Buton 3: Descarcă (Stil Verde) --- */}
+                {result.downloadUrl && (
+                  <div className="button-wrap button-wrap-green w-full mt-6">
+                    <div className="button-shadow"></div>
+                    <a
+                      href={`${BASE_URL}${result.downloadUrl}`}
+                      className="glass-btn glass-btn-green w-full flex items-center justify-center gap-2 leading-none"
+                      download
+                    >
+                      {/* dacă vrei fără icon, șterge <Download /> */}
+                      <Download className="w-5 h-5 flex-shrink-0" />
+                      <span className="truncate">Descarcă Document Tradus</span>
+                    </a>
+                  </div>
+                )}
+
+                
+              </div>
+            )}
+            
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+// ========== II.2 - Translate Audio ==========
+const TranslateAudioPage: React.FC = () => {
+  const [file, setFile] = useState<File | null>(null);
+  const [srcLang, setSrcLang] = useState<string>('en');
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setFile(e.target.files[0]);
+      setError(null);
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!file) return;
+    setLoading(true);
+    setError(null);
+
+    try {
+      const data = await uploadFile('/translate-audio', file, { src_lang: srcLang });
+      setResult(data);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="container mx-auto px-4 py-8 max-w-4xl">
+      <div className="liquidGlass-wrapper liquidGlass-card rounded-3xl mb-6 shadow-lg fade-up" style={{padding: '1.5rem'}}>
+        <div className="liquidGlass-effect" />
+        <div className="liquidGlass-tint" />
+        <div className="liquidGlass-shine" />
+        <div className="liquidGlass-content">
+          <div className="flex items-start gap-4">
+            <div className="bg-gradient-to-br from-purple-400 to-pink-400 w-16 h-16 rounded-xl flex items-center justify-center shadow-lg">
+              <Mic className="w-8 h-8 text-white" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-gray-800 mb-2">II.2 - Traducere Fișiere Audio</h2>
+              <p className="text-gray-600 mb-2">ASR multilingv + Traducere + Generare audio _RO</p>
+              <p className="text-xs text-gray-400 font-mono">Endpoint: POST /api/translate-audio</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="liquidGlass-wrapper liquidGlass-card rounded-3xl shadow-lg fade-up-delay-2" style={{padding: '2rem'}}>
+        <div className="liquidGlass-effect" />
+        <div className="liquidGlass-tint" />
+        <div className="liquidGlass-shine" />
+        <div className="liquidGlass-content">
+          <div className="border-2 border-dashed border-purple-300 rounded-xl p-12 text-center">
+            <Upload className="w-16 h-16 mx-auto text-purple-400 mb-4" />
+            
+            <div className="mb-6">
+              <label className="block mb-2 font-semibold text-gray-700">Limba sursă:</label>
+              <select
+                value={srcLang}
+                onChange={(e) => setSrcLang(e.target.value)}
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+              >
+                <option value="en">🇬🇧 Engleză</option>
+                <option value="zh">🇨🇳 Chineză</option>
+                <option value="ru">🇷🇺 Rusă</option>
+                <option value="ja">🇯🇵 Japoneză</option>
+              </select>
+            </div>
+
+            <p className="text-gray-600 mb-4">Încarcă fișiere audio (.mp3, .wav, .m4a, .ogg)</p>
+
+            <input
+              type="file"
+              accept=".mp3,.wav,.m4a,.ogg,.flac"
+              onChange={handleFileChange}
+              className="hidden"
+              id="translate-audio-input"
+            />
+
+            <div className="button-wrap button-wrap-blue" style={{ display: 'inline-block' }}>
+              <div className="button-shadow"></div>
+              <button 
+                className="glass-btn-blue"
+                onClick={() => document.getElementById('translate-audio-input')?.click()}
+                type="button"
+              >
+                <span>{file ? `📄 ` : 'Selectează Audio'}</span>
+              </button>
+            </div>
+
+            {file && (
+              <button
+                onClick={handleUpload}
+                disabled={loading}
+                className="mt-4 px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-medium hover:shadow-lg transition-all disabled:opacity-50"
+              >
+                {loading ? 'Traducere audio...' : `📤 Traduce Audio ${srcLang.toUpperCase()} → RO`}
+              </button>
+            )}
+
+            {error && <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-600">{error}</div>}
+            
+            {result && (
+              <div className="mt-6 p-6 bg-green-50 border border-green-200 rounded-xl text-left">
+                <h3 className="font-bold text-green-800 mb-3">✅ Traducere audio completă!</h3>
+                <div className="space-y-2 text-sm text-gray-700">
+                  <p><strong>Fișier original:</strong> {result.originalFile}</p>
+                  <p><strong>Limba originală:</strong> {result.originalLanguage}</p>
+                  <p><strong>Limba tradusă:</strong> {result.translatedLanguage}</p>
+                </div>
+                {result.downloadUrl && (
+                  <a
+                    href={`http://localhost:5000/download/${result.downloadUrl}`}
+                    className="mt-4 inline-block px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                    download
+                  >
+                    📥 Descarcă Audio Tradus
+                  </a>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ========== II.3 - Translate Video ==========
+const TranslateVideoPage: React.FC = () => {
+  const [file, setFile] = useState<File | null>(null);
+  const [srcLang, setSrcLang] = useState<string>('en');
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setFile(e.target.files[0]);
+      setError(null);
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!file) return;
+    setLoading(true);
+    setError(null);
+
+    try {
+      const data = await uploadFile('/translate-video', file, { src_lang: srcLang });
+      setResult(data);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="container mx-auto px-4 py-8 max-w-4xl">
+      <div className="liquidGlass-wrapper liquidGlass-card rounded-3xl mb-6 shadow-lg fade-up" style={{padding: '1.5rem'}}>
+        <div className="liquidGlass-effect" />
+        <div className="liquidGlass-tint" />
+        <div className="liquidGlass-shine" />
+        <div className="liquidGlass-content">
+          <div className="flex items-start gap-4">
+            <div className="bg-gradient-to-br from-purple-400 to-pink-400 w-16 h-16 rounded-xl flex items-center justify-center shadow-lg">
+              <VideoIcon className="w-8 h-8 text-white" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-gray-800 mb-2">II.3 - Traducere Fișiere Video</h2>
+              <p className="text-gray-600 mb-2">Extragere audio + Traducere + TTS RO → Video _RO</p>
+              <p className="text-xs text-gray-400 font-mono">Endpoint: POST /api/translate-video</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="liquidGlass-wrapper liquidGlass-card rounded-3xl shadow-lg fade-up-delay-2" style={{padding: '2rem'}}>
+        <div className="liquidGlass-effect" />
+        <div className="liquidGlass-tint" />
+        <div className="liquidGlass-shine" />
+        <div className="liquidGlass-content">
+          <div className="border-2 border-dashed border-purple-300 rounded-xl p-12 text-center">
+            <Upload className="w-16 h-16 mx-auto text-purple-400 mb-4" />
+            
+            <div className="mb-6">
+              <label className="block mb-2 font-semibold text-gray-700">Limba sursă:</label>
+              <select
+                value={srcLang}
+                onChange={(e) => setSrcLang(e.target.value)}
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+              >
+                <option value="en">🇬🇧 Engleză</option>
+                <option value="zh">🇨🇳 Chineză</option>
+                <option value="ru">🇷🇺 Rusă</option>
+                <option value="ja">🇯🇵 Japoneză</option>
+              </select>
+            </div>
+
+            <p className="text-gray-600 mb-4">Încarcă fișiere video (.mp4, .avi, .mov, .mkv)</p>
+
+            <input
+              type="file"
+              accept=".mp4,.avi,.mov,.mkv,.webm"
+              onChange={handleFileChange}
+              className="hidden"
+              id="translate-video-input"
+            />
+
+            <div className="button-wrap button-wrap-blue" style={{ display: 'inline-block' }}>
+              <div className="button-shadow"></div>
+              <button 
+                className="glass-btn-blue"
+                onClick={() => document.getElementById('translate-video-input')?.click()}
+                type="button"
+              >
+                <span>{file ? `📄 ` : 'Selectează Video'}</span>
+              </button>
+            </div>
+
+            {file && (
+              <button
+                onClick={handleUpload}
+                disabled={loading}
+                className="mt-4 px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-medium hover:shadow-lg transition-all disabled:opacity-50"
+              >
+                {loading ? 'Traducere video...' : `📤 Traduce Video ${srcLang.toUpperCase()} → RO`}
+              </button>
+            )}
+
+            {error && <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-600">{error}</div>}
+            
+            {result && (
+              <div className="mt-6 p-6 bg-green-50 border border-green-200 rounded-xl text-left">
+                <h3 className="font-bold text-green-800 mb-3">✅ Traducere video completă!</h3>
+                <div className="space-y-2 text-sm text-gray-700">
+                  <p><strong>Fișier original:</strong> {result.originalFile}</p>
+                  <p><strong>Limba originală:</strong> {result.originalLanguage}</p>
+                  <p><strong>Limba tradusă:</strong> {result.translatedLanguage}</p>
+                </div>
+                {result.downloadUrl && (
+                  <a
+                    href={`http://localhost:5000/download/${result.downloadUrl}`}
+                    className="mt-4 inline-block px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                    download
+                  >
+                    📥 Descarcă Video Tradus
+                  </a>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ========== III.1 - Subtitle RO ==========
+const SubtitleROPage: React.FC = () => {
+  const [file, setFile] = useState<File | null>(null);
+  const [attachMode, setAttachMode] = useState<string>('soft');
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setFile(e.target.files[0]);
+      setError(null);
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!file) return;
+    setLoading(true);
+    setError(null);
+
+    try {
+      const data = await uploadFile('/subtitle-ro', file, { attach: attachMode });
+      setResult(data);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="container mx-auto px-4 py-8 max-w-4xl">
+      <div className="liquidGlass-wrapper liquidGlass-card rounded-3xl mb-6 shadow-lg fade-up" style={{padding: '1.5rem'}}>
+        <div className="liquidGlass-effect" />
+        <div className="liquidGlass-tint" />
+        <div className="liquidGlass-shine" />
+        <div className="liquidGlass-content">
+          <div className="flex items-start gap-4">
+            <div className="bg-gradient-to-br from-green-400 to-emerald-400 w-16 h-16 rounded-xl flex items-center justify-center shadow-lg">
+              <Subtitles className="w-8 h-8 text-white" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-gray-800 mb-2">III.1 - Subtitrare în Limba Originală (RO → RO)</h2>
+              <p className="text-gray-600 mb-2">Generare automată de subtitrare (.srt) în română + rezumat</p>
+              <p className="text-xs text-gray-400 font-mono">Endpoint: POST /api/subtitle-ro</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="liquidGlass-wrapper liquidGlass-card rounded-3xl shadow-lg fade-up-delay-2" style={{padding: '2rem'}}>
+        <div className="liquidGlass-effect" />
+        <div className="liquidGlass-tint" />
+        <div className="liquidGlass-shine" />
+        <div className="liquidGlass-content">
+          <div className="border-2 border-dashed border-green-300 rounded-xl p-12 text-center">
+            <Upload className="w-16 h-16 mx-auto text-green-400 mb-4" />
+            
+            <div className="mb-6">
+              <label className="block mb-2 font-semibold text-gray-700">Mod atașare subtitrare:</label>
+              <select
+                value={attachMode}
+                onChange={(e) => setAttachMode(e.target.value)}
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+              >
+                <option value="soft">Soft (detașabil - .srt separat)</option>
+                <option value="hard">Hard (burnt-in - încorporat în video)</option>
+              </select>
+            </div>
+
+            <p className="text-gray-600 mb-4">Încarcă video în română (.mp4, .avi, .mov, .mkv)</p>
+
+            <input
+              type="file"
+              accept=".mp4,.avi,.mov,.mkv,.webm"
+              onChange={handleFileChange}
+              className="hidden"
+              id="subtitle-ro-input"
+            />
+
+            <div className="button-wrap button-wrap-green" style={{ display: 'inline-block' }}>
+              <div className="button-shadow"></div>
+              <button 
+                className="glass-btn-green"
+                onClick={() => document.getElementById('subtitle-ro-input')?.click()}
+                type="button"
+              >
+                <span>{file ? `📄 ` : 'Selectează Video'}</span>
+              </button>
+            </div>
+
+            {file && (
+              <button
+                onClick={handleUpload}
+                disabled={loading}
+                className="mt-4 px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-xl font-medium hover:shadow-lg transition-all disabled:opacity-50"
+              >
+                {loading ? 'Generare subtitrare...' : '🎬 Generează Subtitrare'}
+              </button>
+            )}
+
+            {error && <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-600">{error}</div>}
+            
+            {result && (
+              <div className="mt-6 p-6 bg-green-50 border border-green-200 rounded-xl text-left">
+                <h3 className="font-bold text-green-800 mb-3">✅ Subtitrare generată!</h3>
+                <div className="space-y-2 text-sm text-gray-700">
+                  <p><strong>Fișier original:</strong> {result.originalFile}</p>
+                  {result.subtitleFile && <p><strong>Fișier SRT:</strong> {result.subtitleFile}</p>}
+                  {result.totalSegments && <p><strong>Total segmente:</strong> {result.totalSegments}</p>}
+                </div>
+                {result.downloadUrl && (
+                  <a
+                    href={`http://localhost:5000/download/${result.downloadUrl}`}
+                    className="mt-4 inline-block px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                    download
+                  >
+                    📥 Descarcă Video cu Subtitrare
+                  </a>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ========== III.2 - Redub Video ==========
+const RedubVideoPage: React.FC = () => {
+  const [file, setFile] = useState<File | null>(null);
+  const [srcLang, setSrcLang] = useState<string>('ro');
+  const [destLang, setDestLang] = useState<string>('en');
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setFile(e.target.files[0]);
+      setError(null);
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!file) return;
+    setLoading(true);
+    setError(null);
+
+    try {
+      const data = await uploadFile('/redub-video', file, { src_lang: srcLang, dest_lang: destLang });
+      setResult(data);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="container mx-auto px-4 py-8 max-w-4xl">
+      <div className="liquidGlass-wrapper liquidGlass-card rounded-3xl mb-6 shadow-lg fade-up" style={{padding: '1.5rem'}}>
+        <div className="liquidGlass-effect" />
+        <div className="liquidGlass-tint" />
+        <div className="liquidGlass-shine" />
+        <div className="liquidGlass-content">
+          <div className="flex items-start gap-4">
+            <div className="bg-gradient-to-br from-green-400 to-emerald-400 w-16 h-16 rounded-xl flex items-center justify-center shadow-lg">
+              <Video className="w-8 h-8 text-white" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-gray-800 mb-2">III.2 - Redublare Video (Audio Înlocuit)</h2>
+              <p className="text-gray-600 mb-2">Traducere audio RO ↔ EN + înlocuire + rezumat</p>
+              <p className="text-xs text-gray-400 font-mono">Endpoint: POST /api/redub-video</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="liquidGlass-wrapper liquidGlass-card rounded-3xl shadow-lg fade-up-delay-2" style={{padding: '2rem'}}>
+        <div className="liquidGlass-effect" />
+        <div className="liquidGlass-tint" />
+        <div className="liquidGlass-shine" />
+        <div className="liquidGlass-content">
+          <div className="border-2 border-dashed border-green-300 rounded-xl p-12 text-center">
+            <Upload className="w-16 h-16 mx-auto text-green-400 mb-4" />
+            
+            <div className="mb-6 flex gap-4 justify-center">
+              <div>
+                <label className="block mb-2 font-semibold text-gray-700">Din limba:</label>
+                <select
+                  value={srcLang}
+                  onChange={(e) => setSrcLang(e.target.value)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                >
+                  <option value="ro">🇷🇴 Română</option>
+                  <option value="en">🇬🇧 Engleză</option>
+                </select>
+              </div>
+              <div>
+                <label className="block mb-2 font-semibold text-gray-700">În limba:</label>
+                <select
+                  value={destLang}
+                  onChange={(e) => setDestLang(e.target.value)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                >
+                  <option value="en">🇬🇧 Engleză</option>
+                  <option value="ro">🇷🇴 Română</option>
+                </select>
+              </div>
+            </div>
+
+            <p className="text-gray-600 mb-4">Încarcă video pentru redublare (.mp4, .avi, .mov, .mkv)</p>
+
+            <input
+              type="file"
+              accept=".mp4,.avi,.mov,.mkv,.webm"
+              onChange={handleFileChange}
+              className="hidden"
+              id="redub-video-input"
+            />
+
+            <div className="button-wrap button-wrap-green" style={{ display: 'inline-block' }}>
+              <div className="button-shadow"></div>
+              <button 
+                className="glass-btn-green"
+                onClick={() => document.getElementById('redub-video-input')?.click()}
+                type="button"
+              >
+                <span>{file ? `📄 ` : 'Selectează Video'}</span>
+              </button>
+            </div>
+
+            {file && (
+              <button
+                onClick={handleUpload}
+                disabled={loading}
+                className="mt-4 px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-xl font-medium hover:shadow-lg transition-all disabled:opacity-50"
+              >
+                {loading ? 'Redublare în curs...' : `🎙️ Redublează ${srcLang.toUpperCase()} → ${destLang.toUpperCase()}`}
+              </button>
+            )}
+
+            {error && <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-600">{error}</div>}
+            
+            {result && (
+              <div className="mt-6 p-6 bg-green-50 border border-green-200 rounded-xl text-left">
+                <h3 className="font-bold text-green-800 mb-3">✅ Redublare completă!</h3>
+                <div className="space-y-2 text-sm text-gray-700">
+                  <p><strong>Fișier original:</strong> {result.originalFile}</p>
+                  <p><strong>Limba originală:</strong> {result.originalLanguage}</p>
+                  <p><strong>Limba țintă:</strong> {result.targetLanguage}</p>
+                </div>
+                {result.downloadUrl && (
+                  <a
+                    href={`http://localhost:5000/download/${result.downloadUrl}`}
+                    className="mt-4 inline-block px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                    download
+                  >
+                    📥 Descarcă Video Redublat
+                  </a>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ========== IV - Live Subtitle ==========
+const LiveSubtitlePage: React.FC = () => {
+  const [sessionId] = useState<string>(() => `session_${Date.now()}`);
+  const [participants] = useState([
+    { id: 'user1', name: 'Ion', language: 'ro' },
+    { id: 'user2', name: 'Ivan', language: 'ru' }
+  ]);
+  const [isActive, setIsActive] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const startSession = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/live-start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId, participants })
+      });
+      
+      if (!response.ok) throw new Error('Failed to start session');
+      
+      setIsActive(true);
+      setError(null);
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
+
+  const stopSession = async () => {
+    try {
+      await fetch('http://localhost:5000/api/live-stop', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId })
+      });
+      setIsActive(false);
+      setError(null);
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
+
+  return (
+    <div className="container mx-auto px-4 py-8 max-w-4xl">
+      <div className="liquidGlass-wrapper liquidGlass-card rounded-3xl mb-6 shadow-lg fade-up" style={{padding: '1.5rem'}}>
+        <div className="liquidGlass-effect" />
+        <div className="liquidGlass-tint" />
+        <div className="liquidGlass-shine" />
+        <div className="liquidGlass-content">
+          <div className="flex items-start gap-4">
+            <div className="bg-gradient-to-br from-orange-400 to-red-400 w-16 h-16 rounded-xl flex items-center justify-center shadow-lg">
+              <MessageSquare className="w-8 h-8 text-white" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-gray-800 mb-2">IV - Subtitrare Bidirecțională Live (RO ↔ RU)</h2>
+              <p className="text-gray-600 mb-2">Dialog în timp real între 2+ persoane cu subtitrări simultane</p>
+              <p className="text-xs text-gray-400 font-mono">Endpoint: WebSocket /api/live-start</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="liquidGlass-wrapper liquidGlass-card rounded-3xl shadow-lg fade-up-delay-2" style={{padding: '2rem'}}>
+        <div className="liquidGlass-effect" />
+        <div className="liquidGlass-tint" />
+        <div className="liquidGlass-shine" />
+        <div className="liquidGlass-content">
+          <div className="border-2 border-solid border-orange-300 rounded-xl p-12 text-center">
+            <Radio className="w-16 h-16 mx-auto text-orange-400 mb-4" />
+            
+            <div className="mb-6 text-left bg-white/50 rounded-xl p-4">
+              <p className="font-semibold mb-2">📋 Detalii sesiune:</p>
+              <p><strong>Session ID:</strong> {sessionId}</p>
+              <p><strong>Status:</strong> {isActive ? '🟢 Activ' : '🔴 Inactiv'}</p>
+              <p className="mt-2"><strong>Participanți:</strong></p>
+              <ul className="ml-4 mt-1">
+                {participants.map(p => (
+                  <li key={p.id}>• {p.name} ({p.language.toUpperCase()})</li>
+                ))}
+              </ul>
+            </div>
+
+            <p className="text-gray-600 mb-6">Funcționalitate în timp real - WebSocket</p>
+
+            {!isActive ? (
+              <button
+                onClick={startSession}
+                className="px-6 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl font-medium hover:shadow-lg transition-all"
+              >
+                🎙️ Pornește Sesiune Live
+              </button>
+            ) : (
+              <button
+                onClick={stopSession}
+                className="px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl font-medium hover:shadow-lg transition-all"
+              >
+                ⏹️ Oprește Sesiune
+              </button>
+            )}
+
+            {error && <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-600">{error}</div>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ========== MAIN APP ==========
 const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState("home");
   const [backendStatus, setBackendStatus] = useState<string>("checking");
 
-  React.useEffect(() => {
+  useEffect(() => {
     const checkBackend = async () => {
-      const isOnline = await realApi.checkHealth();
-      setBackendStatus(isOnline ? "online" : "offline");
+      try {
+        const response = await fetch('http://localhost:5000/api/health');
+        setBackendStatus(response.ok ? "online" : "offline");
+      } catch {
+        setBackendStatus("offline");
+      }
     };
     checkBackend();
     const interval = setInterval(checkBackend, 30000);
@@ -1337,10 +1478,24 @@ const App: React.FC = () => {
 
   const renderPage = () => {
     switch (currentPage) {
-      case "summary": return <SummaryPage backendStatus={backendStatus} />;
-      case "subtitles": return <SubtitlesPage backendStatus={backendStatus} />;
-      case "dubbing": return <DubbingPage backendStatus={backendStatus} />;
-      default: return <HomeCards onNavigate={setCurrentPage} backendStatus={backendStatus} />;
+      // I - Analiză și stocare
+      case "ppt": return <PPTAnalysisPage />;
+      case "word-pdf": return <WordPDFAnalysisPage />;
+      case "image-ocr": return <ImageOCRPage />;
+      
+      // II - Traducere multilingvă
+      case "translate-docs": return <TranslateDocsPage />;
+      case "translate-audio": return <TranslateAudioPage />;
+      case "translate-video": return <TranslateVideoPage />;
+      
+      // III - Subtitrare și redublaj
+      case "subtitle-ro": return <SubtitleROPage />;
+      case "redub-video": return <RedubVideoPage />;
+      
+      // IV - Live subtitle
+      case "live-subtitle": return <LiveSubtitlePage />;
+      
+      default: return <HomeCards onNavigate={setCurrentPage} />;
     }
   };
 
@@ -1353,6 +1508,8 @@ const App: React.FC = () => {
         <main className="flex-1">{renderPage()}</main>
         <Footer />
       </div>
-    </ErrorBoundary>)};
+    </ErrorBoundary>
+  );
+};
 
 export default App;
