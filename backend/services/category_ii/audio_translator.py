@@ -1,34 +1,330 @@
+"""
+audio_translator.py
 
-import shutil
+Adaptor pentru endpoint-ul:
+    /api/translate-audio
+
+Funcționalități:
+- Primește un fișier audio (deja salvat în UPLOAD_FOLDER)
+- Transcrie audio cu Google Gemini
+- Traduce transcrierea în română
+- Generează audio în română (MP3) cu gTTS, cu sufix _RO
+- Generează un rezumat în română, salvat .txt cu sufix _RO_rezumat
+- Întoarce un dict compatibil cu Flask view-ul:
+
+    translator = AudioTranslator()
+    result = translator.translate(filepath, src_lang=src_lang, dest_lang='ro')
+
+    return jsonify({
+        'service': 'Audio Translation',
+        'originalFile': filename,
+        'originalLanguage': src_lang.upper(),
+        'translatedLanguage': 'RO',
+        'downloadUrl': result.get('audio_file', ''),
+        'status': 'success',
+        **result
+    })
+
+Câmpuri în result:
+- audio_file   -> URL către fișierul audio tradus (MP3), ex: /download/<fisier>
+- summary_file -> URL către fișierul de rezumat (TXT), ex: /download/<fisier>
+- note         -> mesaj informativ
+"""
+
+import os
+import time
+import mimetypes
 from pathlib import Path
-from datetime import datetime
+from typing import Optional, Dict, Any
 
+import google.generativeai as genai
+from gtts import gTTS
+from dotenv import load_dotenv
+
+# Încarcă variabilele de mediu (dacă există .env)
+load_dotenv()
+
+# Extensii audio suportate
+SUPPORTED_AUDIO = {".mp3", ".wav", ".m4a", ".flac", ".ogg", ".aac"}
+
+
+# ———————————— Utilitare ————————————
+def guess_mime(path: str) -> str:
+    """
+    Ghicește MIME type pentru un fișier audio, cu câteva fallback-uri.
+    """
+    mime, _ = mimetypes.guess_type(path)
+    if not mime:
+        ext = Path(path).suffix.lower()
+        if ext in {".m4a", ".aac"}:
+            return "audio/aac"
+        if ext in {".flac"}:
+            return "audio/flac"
+        if ext in {".ogg"}:
+            return "audio/ogg"
+    return mime or "audio/mpeg"
+
+
+# ———————————— Clasa principală ————————————
 class AudioTranslator:
     """
-    Minimal audio 'translator':
-    - Does NOT perform real ASR/MT
-    - Copies the input audio to processed with a new name
-    - Generates a sidecar .txt with a placeholder translation
+    Traducător audio → română bazat pe Gemini + gTTS.
+    Folosit de endpoint-ul /api/translate-audio.
     """
-    def __init__(self, processed_dir: str = "processed"):
+
+    def __init__(
+        self,
+        processed_dir: str = "processed",
+        google_api_key: Optional[str] = None,
+        gemini_model: Optional[str] = None,
+    ) -> None:
+        """
+        Args:
+            processed_dir: directorul în care salvăm fișierele rezultate (_RO.mp3, _RO_rezumat.txt)
+            google_api_key: cheia Google AI; dacă nu se dă, se folosește .env/var de mediu
+            gemini_model: ID model Gemini (ex: "gemini-1.5-flash", "gemini-2.0-flash-lite")
+        """
         self.processed_dir = Path(processed_dir)
         self.processed_dir.mkdir(parents=True, exist_ok=True)
 
-    def translate(self, filepath: str, src_lang: str = "en", dest_lang: str = "ro"):
-        path = Path(filepath)
-        out_audio = self.processed_dir / f"{path.stem}_{dest_lang}{path.suffix}"
-        shutil.copyfile(str(path), str(out_audio))
-
-        transcript = self.processed_dir / f"{path.stem}_{dest_lang}.txt"
-        transcript.write_text(
-            f"# Pseudo translation for {path.name} ({src_lang}->{dest_lang})\n"
-            f"# Generated: {datetime.now().isoformat()}\n\n"
-            f"[This is a placeholder. Integrate ASR/MT for real results]\n",
-            encoding="utf-8"
+        # Cheia API – poți ajusta după cum vrei (env sau hard-coded)
+        self.api_key = (
+            google_api_key
+            or os.getenv("GOOGLE_API_KEY")
+            or "AIzaSyCLj69fE4qI77BMap4hCBscIhzgrYKwuGA"  # aceeași ca în translation.py
         )
+        if not self.api_key:
+            raise ValueError(
+                "Google API key este necesară! Setează GOOGLE_API_KEY în .env "
+                "sau trece-o ca parametru la AudioTranslator."
+            )
 
-        return {
-            "audio_file": f"/download/{out_audio.name}",
-            "transcript_file": f"/download/{transcript.name}",
-            "note": "Copied audio; generated placeholder transcript."
+        genai.configure(api_key=self.api_key)
+        self.model_id = gemini_model or os.getenv("GEMINI_MODEL", "gemini-2.0-flash-lite")
+        self.model = genai.GenerativeModel(self.model_id)
+
+    # ———————————— Detectare fișier ————————————
+    def is_audio_file(self, filepath: str) -> bool:
+        return Path(filepath).suffix.lower() in SUPPORTED_AUDIO
+
+    # ———————————— Integrare Gemini ————————————
+    def _upload_to_gemini(self, path: str):
+        mime = guess_mime(path)
+        print(f"⬆️  Încarc fișier la Gemini ({mime})…")
+        file = genai.upload_file(path=path, mime_type=mime)
+        # Așteaptă procesarea dacă este cazul
+        while True:
+            f = genai.get_file(file.name)
+            if f.state.name == "ACTIVE":
+                break
+            if f.state.name == "FAILED":
+                raise RuntimeError("Încărcarea la Gemini a eșuat.")
+            time.sleep(1)
+        return file
+
+    def transcribe_audio(self, audio_path: str) -> str:
+        """
+        Transcrie audio folosind Google Gemini.
+        Returnează doar textul transcris.
+        """
+        print(f"🎤 Transcriu audio cu Gemini: {audio_path}")
+        try:
+            file = self._upload_to_gemini(audio_path)
+            prompt = (
+                "Transcrie fidel conținutul audio în limba vorbită. "
+                "Returnează DOAR transcrierea ca text brut, fără explicații."
+            )
+            resp = self.model.generate_content(
+                [file, prompt],
+                generation_config={"temperature": 0.1},
+            )
+            transcript = resp.text.strip() if hasattr(resp, "text") else ""
+            if not transcript:
+                raise RuntimeError("Transcriere goală întoarsă de model.")
+            print(f"✓ Audio transcris ({len(transcript)} caractere)")
+            return transcript
+        except Exception as e:
+            print(f"✗ Eroare la transcriere: {e}")
+            raise
+
+    def translate_to_romanian(self, text: str) -> str:
+        """
+        Traduce text în română folosind Gemini.
+        """
+        print("🌍 Traduc text în română (Gemini)…")
+        try:
+            system = (
+                "Ești un traducător profesionist. Tradu în română textul dat, "
+                "păstrând sensul, numele proprii și tonul. Returnează DOAR traducerea."
+            )
+            resp = self.model.generate_content(
+                [system, text],
+                generation_config={"temperature": 0.2},
+            )
+            translated = resp.text.strip() if hasattr(resp, "text") else ""
+            if not translated:
+                raise RuntimeError("Traducere goală întoarsă de model.")
+            print(f"✓ Text tradus ({len(translated)} caractere)")
+            return translated
+        except Exception as e:
+            print(f"✗ Eroare la traducere: {e}")
+            raise
+
+    def generate_audio_from_text(self, text: str, output_path: str, lang: str = "ro") -> str:
+        """
+        Generează fișier audio MP3 din text folosind gTTS.
+        """
+        print("🔊 Generez audio în română (gTTS)…")
+        try:
+            out = Path(output_path)
+            if out.suffix.lower() != ".mp3":
+                out = out.with_suffix(".mp3")
+            tts = gTTS(text=text, lang=lang)
+            tts.save(str(out))
+            print(f"✅ Audio generat: {out}")
+            return str(out)
+        except Exception as e:
+            print(f"❌ Eroare la generarea audio: {e}")
+            raise
+
+    def generate_summary(self, text: str) -> str:
+        """
+        Generează un rezumat structurat în limba română (Gemini).
+        """
+        print("📝 Generez rezumat (Gemini)…")
+        try:
+            system = (
+                "Creează un rezumat concis și informativ în română, structurat astfel:\n\n"
+                "REZUMAT EXECUTIV:\n- 2-3 propoziții esențiale\n\n"
+                "PUNCTE CHEIE:\n- 3-7 bullet-uri cu ideile principale\n\n"
+                "DETALII IMPORTANTE:\n- informații relevante suplimentare, dacă există\n\n"
+                "CONCLUZII:\n- 1-3 takeaway-uri finale.\n\n"
+                "Returnează DOAR rezumatul în acest format."
+            )
+            resp = self.model.generate_content(
+                [system, f"Textul de rezumat este:\n\n{text}"],
+                generation_config={"temperature": 0.3},
+            )
+            summary = resp.text.strip() if hasattr(resp, "text") else ""
+            if not summary:
+                raise RuntimeError("Rezumat gol întors de model.")
+            print(f"✓ Rezumat generat ({len(summary)} caractere)")
+            return summary
+        except Exception as e:
+            print(f"✗ Eroare la generarea rezumatului: {e}")
+            raise
+
+    def save_summary(self, summary: str, output_path: str) -> str:
+        """
+        Salvează rezumatul într-un fișier text.
+        """
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(summary)
+        print(f"✓ Rezumat salvat: {output_path}")
+        return output_path
+
+    # ———————————— Pipeline AUDIO ————————————
+    def process_audio_file(self, audio_path: str, output_dir: Optional[str] = None) -> Dict[str, str]:
+        """
+        Pipeline complet pentru un fișier audio:
+        - transcriere
+        - traducere în română
+        - generare audio RO (MP3)
+        - generare rezumat RO (TXT)
+        """
+        print(f"\n{'=' * 60}\n🎵 PROCESARE FIȘIER AUDIO\n{'=' * 60}\n")
+        audio_path = Path(audio_path)
+        output_dir = Path(output_dir) if output_dir else audio_path.parent
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        base_name = audio_path.stem
+        output_audio_path = output_dir / f"{base_name}_RO.mp3"
+        output_summary_path = output_dir / f"{base_name}_RO_rezumat.txt"
+        temp_tts_path = output_dir / f"{base_name}_tts_temp.mp3"
+
+        results: Dict[str, str] = {}
+        try:
+            # 1. Transcriere audio original
+            transcript = self.transcribe_audio(str(audio_path))
+
+            # 2. Traducere în română
+            translated_text = self.translate_to_romanian(transcript)
+
+            # 3. Generare audio în română
+            tts_path = self.generate_audio_from_text(translated_text, str(temp_tts_path))
+            os.replace(tts_path, output_audio_path)
+            results["audio"] = str(output_audio_path)
+
+            # 4. Generare rezumat
+            summary = self.generate_summary(translated_text)
+            self.save_summary(summary, str(output_summary_path))
+            results["summary"] = str(output_summary_path)
+
+            print(
+                f"\n{'=' * 60}\n✓ PROCESARE AUDIO COMPLETĂ\n"
+                f"  Audio RO: {output_audio_path}\n"
+                f"  Rezumat: {output_summary_path}\n{'=' * 60}\n"
+            )
+            return results
+        except Exception as e:
+            print(f"\n✗ Eroare la procesarea fișierului audio: {e}")
+            raise
+        finally:
+            # Curățăm fișierul temporar, dacă există
+            try:
+                Path(temp_tts_path).unlink(missing_ok=True)
+            except Exception:
+                pass
+
+    # ———————————— Interfață pentru endpoint ————————————
+    def translate(
+        self,
+        filepath: str,
+        src_lang: str = "en",
+        dest_lang: str = "ro",
+    ) -> Dict[str, Any]:
+        """
+        Metoda folosită de endpoint-ul /api/translate-audio.
+
+        Args:
+            filepath: cale către fișierul audio uploadat
+            src_lang: limbă sursă declarată (doar informativ)
+            dest_lang: limba țintă – momentan doar 'ro' este suportat
+
+        Return:
+            dict cu:
+                - audio_file: /download/<fisier_mp3_tradus>
+                - summary_file: /download/<fisier_rezumat_txt>
+                - note: mesaj
+        """
+        if dest_lang.lower() != "ro":
+            raise ValueError(
+                "Acest serviciu suportă momentan doar traducerea în limba română (dest_lang='ro')."
+            )
+
+        audio_path = Path(filepath)
+        if not audio_path.exists():
+            raise FileNotFoundError(f"Fișierul nu există: {filepath}")
+
+        if not self.is_audio_file(str(audio_path)):
+            raise ValueError("Endpoint-ul /api/translate-audio acceptă doar fișiere audio.")
+
+        # Procesez audio și pun rezultatele în processed_dir
+        results = self.process_audio_file(str(audio_path), output_dir=str(self.processed_dir))
+
+        response: Dict[str, Any] = {
+            "note": (
+                f"Audio tradus în română folosind Gemini. "
+                f"Sursa: {audio_path.name}. Limba sursă declarată: {src_lang.upper()}."
+            )
         }
+
+        audio_out = results.get("audio")
+        if audio_out:
+            response["audio_file"] = f"/download/{Path(audio_out).name}"
+
+        summary_out = results.get("summary")
+        if summary_out:
+            response["summary_file"] = f"/download/{Path(summary_out).name}"
+
+        return response

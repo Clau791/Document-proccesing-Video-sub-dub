@@ -681,6 +681,34 @@ const TranslateDocsPage: React.FC = () => {
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
 
+    // ➜ PROGRES (pagini)
+  const [pagesDone, setPagesDone] = useState(0);
+  const [pagesTotal, setPagesTotal] = useState(0);
+  const [percent, setPercent] = useState(0);
+  const [showProgress, setShowProgress] = useState(false);
+
+  useEffect(() => {
+    // Conectare la SSE-ul backendului
+    const es = new EventSource("http://127.0.0.1:5000/events"); // același host/port ca app.py
+
+    es.onmessage = (evt) => {
+      try {
+        const data = JSON.parse(evt.data);
+        if (typeof data.percent === "number") setPercent(data.percent);
+        if (typeof data.pages_done === "number") setPagesDone(data.pages_done);
+        if (typeof data.pages_total === "number") setPagesTotal(data.pages_total);
+        setShowProgress(true);
+      } catch { /* ignore */ }
+    };
+
+    es.onerror = () => {
+      // închidem pe eroare (ex: backend oprit)
+      es.close();
+    };
+
+    return () => es.close();
+  }, []);
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setFile(e.target.files[0]);
@@ -813,6 +841,24 @@ const TranslateDocsPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* --- Progres Traducere (SSE) --- */}
+{showProgress && (
+  <div className="mt-6">
+    <div className="w-full h-3 bg-gray-200/70 rounded-full overflow-hidden">
+      <div
+        className="h-3 bg-green-500 transition-all duration-300"
+        style={{ width: `${percent}%` }}
+      />
+    </div>
+    <div className="mt-2 text-xs text-gray-600">
+      {pagesTotal > 0
+        ? <>Progres: {pagesDone}/{pagesTotal} pagini ({percent}%)</>
+        : <>Progres: {percent}%</>}
+    </div>
+  </div>
+)}
+
     </div>
   );
 };

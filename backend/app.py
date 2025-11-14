@@ -25,7 +25,7 @@ from services.category_ii.video_translator import VideoTranslator
 from services.category_iii.subtitle_generator import SubtitleGenerator
 # from backend.services.category_iii.video_redubber import VideoRedubber
 from services.category_iv.live_subtitle import LiveSubtitleEngine
-
+from services.progress_bar import progress_bp
 # Import sistemul optimizat de subtitrare
 # from backend.subtitles.sub import OptimizedSubtitleSystem
 
@@ -637,7 +637,8 @@ if __name__ == '__main__':
     print("   • /api/live-start           - Live Start")
     print("   • /api/live-stop            - Live Stop")
     print("="*60 + "\n")
-    
+    app.register_blueprint(progress_bp)
+
     socketio.run(
         app,
         debug=True,

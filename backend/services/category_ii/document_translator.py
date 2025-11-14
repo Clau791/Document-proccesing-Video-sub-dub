@@ -14,6 +14,7 @@ from reportlab.lib.utils import simpleSplit
 from PIL import Image
 import pytesseract
 import requests 
+from services.progress_bar import send_pages_progress
 GEMINI_API_KEY = "AIzaSyCMr_9mKOj2lJkq-sfA47cTMmCRwO3Jj0U"
 GEMINI_MODEL = "gemini-2.0-flash-lite" 
 # BASE = "http://86.126.134.77:11434/api/generate"
@@ -571,6 +572,8 @@ def translate_pdf_document(input_path, output_path=None, src_lang='en', dest_lan
     
     # Procesează fiecare pagină
     for page_num in range(len(doc_original)):
+        
+       
         page_original = doc_original[page_num]
         print(f"📄 Pagina {page_num + 1}/{len(doc_original)}")
         
@@ -688,6 +691,7 @@ def translate_pdf_document(input_path, output_path=None, src_lang='en', dest_lan
             except Exception as e:
                 print(f"   ❌ Eroare: {e}")
                 continue
+    send_pages_progress(done=page_num + 1, total=len(doc_original))
     
     # Închide originalul
     doc_original.close()
