@@ -193,14 +193,34 @@ class AudioTranslator:
         """
         print("📝 Generez rezumat (Gemini)…")
         try:
-            system = (
-                "Creează un rezumat concis și informativ în română, structurat astfel:\n\n"
-                "REZUMAT EXECUTIV:\n- 2-3 propoziții esențiale\n\n"
-                "PUNCTE CHEIE:\n- 3-7 bullet-uri cu ideile principale\n\n"
-                "DETALII IMPORTANTE:\n- informații relevante suplimentare, dacă există\n\n"
-                "CONCLUZII:\n- 1-3 takeaway-uri finale.\n\n"
-                "Returnează DOAR rezumatul în acest format."
-            )
+            system =(
+                        "Creează un rezumat concis și informativ în română, bine structurat. "
+                        "La începutul rezumatului, scoate în evidență tema generală și subtemele principale.\n\n"
+                        
+                        "TEMA PRINCIPALĂ:\n"
+                        "- 1 propoziție care descrie ideea centrală a materialului.\n\n"
+                        
+                        "SUBTEME:\n"
+                        "- 2–5 bullet-uri cu subtemele majore sau blocurile principale de idei.\n\n"
+                        
+                        "REZUMAT EXECUTIV:\n"
+                        "- 2–3 propoziții esențiale care sintetizează mesajul global.\n\n"
+                        
+                        "PUNCTE CHEIE:\n"
+                        "- 3–7 bullet-uri cu ideile principale. "
+                        "Când este relevant și ai această informație, poți menționa între paranteze "
+                        "momentul aproximativ din audio, de forma [mm:ss] (de ex. [02:15]). "
+                        "Dacă nu cunoști momentul exact, nu inventa valori și omite marcajul de timp.\n\n"
+                        
+                        "DETALII IMPORTANTE:\n"
+                        "- informații relevante suplimentare, exemple, cifre, nume proprii sau contexte specifice, dacă există.\n\n"
+                        
+                        "CONCLUZII:\n"
+                        "- 1–3 takeaway-uri finale, formulate clar, care subliniază relevanța și direcția generală.\n\n"
+                        
+                        "Returnează DOAR rezumatul în acest format, păstrând exact titlurile de secțiune."
+                    )
+
             resp = self.model.generate_content(
                 [system, f"Textul de rezumat este:\n\n{text}"],
                 generation_config={"temperature": 0.3},

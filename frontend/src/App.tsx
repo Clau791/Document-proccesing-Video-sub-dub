@@ -874,6 +874,7 @@ const TranslateAudioPage: React.FC = () => {
     if (e.target.files && e.target.files[0]) {
       setFile(e.target.files[0]);
       setError(null);
+      setResult(null); // resetăm rezultatul la fișier nou (ca la translate-docs)
     }
   };
 
@@ -881,6 +882,7 @@ const TranslateAudioPage: React.FC = () => {
     if (!file) return;
     setLoading(true);
     setError(null);
+    setResult(null);
 
     try {
       const data = await uploadFile('/translate-audio', file, { src_lang: srcLang });
@@ -894,7 +896,11 @@ const TranslateAudioPage: React.FC = () => {
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
-      <div className="liquidGlass-wrapper liquidGlass-card rounded-3xl mb-6 shadow-lg fade-up" style={{padding: '1.5rem'}}>
+      {/* Card titlu */}
+      <div
+        className="liquidGlass-wrapper liquidGlass-card rounded-3xl mb-6 shadow-lg fade-up"
+        style={{ padding: '1.5rem' }}
+      >
         <div className="liquidGlass-effect" />
         <div className="liquidGlass-tint" />
         <div className="liquidGlass-shine" />
@@ -904,28 +910,41 @@ const TranslateAudioPage: React.FC = () => {
               <Mic className="w-8 h-8 text-white" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-gray-800 mb-2">II.2 - Traducere Fișiere Audio</h2>
-              <p className="text-gray-600 mb-2">ASR multilingv + Traducere + Generare audio _RO</p>
-              <p className="text-xs text-gray-400 font-mono">Endpoint: POST /api/translate-audio</p>
+              <h2 className="text-2xl font-bold text-gray-800 mb-2">
+                II.2 - Traducere Fișiere Audio
+              </h2>
+              <p className="text-gray-600 mb-2">
+                ASR multilingv + Traducere + Generare audio _RO
+              </p>
+              <p className="text-xs text-gray-400 font-mono">
+                Endpoint: POST /api/translate-audio
+              </p>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="liquidGlass-wrapper liquidGlass-card rounded-3xl shadow-lg fade-up-delay-2" style={{padding: '2rem'}}>
+      {/* Card upload – stil ca la TranslateDocsPage */}
+      <div
+        className="liquidGlass-wrapper liquidGlass-card rounded-3xl shadow-lg fade-up-delay-2"
+        style={{ padding: '2rem' }}
+      >
         <div className="liquidGlass-effect" />
         <div className="liquidGlass-tint" />
         <div className="liquidGlass-shine" />
         <div className="liquidGlass-content">
           <div className="border-2 border-dashed border-purple-300 rounded-xl p-12 text-center">
             <Upload className="w-16 h-16 mx-auto text-purple-400 mb-4" />
-            
-            <div className="mb-6">
-              <label className="block mb-2 font-semibold text-gray-700">Limba sursă:</label>
+
+            {/* Limba sursă */}
+            <div className="mb-6 max-w-md mx-auto text-left">
+              <label className="block mb-2 font-semibold text-gray-700">
+                Limba sursă:
+              </label>
               <select
                 value={srcLang}
                 onChange={(e) => setSrcLang(e.target.value)}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
               >
                 <option value="en">🇬🇧 Engleză</option>
                 <option value="zh">🇨🇳 Chineză</option>
@@ -934,7 +953,9 @@ const TranslateAudioPage: React.FC = () => {
               </select>
             </div>
 
-            <p className="text-gray-600 mb-4">Încarcă fișiere audio (.mp3, .wav, .m4a, .ogg)</p>
+            <p className="text-gray-600 mb-4">
+              Încarcă fișiere audio (.mp3, .wav, .m4a, .ogg, .flac)
+            </p>
 
             <input
               type="file"
@@ -944,45 +965,87 @@ const TranslateAudioPage: React.FC = () => {
               id="translate-audio-input"
             />
 
-            <div className="button-wrap button-wrap-blue" style={{ display: 'inline-block' }}>
-              <div className="button-shadow"></div>
-              <button 
-                className="glass-btn-blue"
-                onClick={() => document.getElementById('translate-audio-input')?.click()}
-                type="button"
-              >
-                <span>{file ? `📄 ` : 'Selectează Audio'}</span>
-              </button>
+            {/* Container vertical pentru butoane – ca la translate-docs */}
+            <div className="flex flex-col items-center gap-4 max-w-md mx-auto">
+              {/* Buton 1: Selectează Audio */}
+              <div className="button-wrap button-wrap-blue w-full">
+                <div className="button-shadow"></div>
+                <button
+                  className="glass-btn glass-btn-blue w-full"
+                  onClick={() =>
+                    document.getElementById('translate-audio-input')?.click()
+                  }
+                  type="button"
+                >
+                  <span className="truncate">
+                    {file ? `🔊 ${file.name}` : 'Selectează Audio'}
+                  </span>
+                </button>
+              </div>
+
+              {/* Buton 2: Traduce Audio */}
+              {file && (
+                <div className="button-wrap button-wrap-purple w-full">
+                  <div className="button-shadow"></div>
+                  <button
+                    onClick={handleUpload}
+                    disabled={loading}
+                    className="glass-btn glass-btn-purple w-full"
+                  >
+                    <span className="truncate">
+                      {loading
+                        ? 'Traducere audio în curs...'
+                        : `Tradu Audio ${srcLang.toUpperCase()} → RO`}
+                    </span>
+                  </button>
+                </div>
+              )}
             </div>
 
-            {file && (
-              <button
-                onClick={handleUpload}
-                disabled={loading}
-                className="mt-4 px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-medium hover:shadow-lg transition-all disabled:opacity-50"
-              >
-                {loading ? 'Traducere audio...' : `📤 Traduce Audio ${srcLang.toUpperCase()} → RO`}
-              </button>
+            {/* Eroare */}
+            {error && (
+              <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-600">
+                {error}
+              </div>
             )}
 
-            {error && <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-600">{error}</div>}
-            
+            {/* Rezultat */}
             {result && (
-              <div className="mt-6 p-6 bg-green-50 border border-green-200 rounded-xl text-left">
-                <h3 className="font-bold text-green-800 mb-3">✅ Traducere audio completă!</h3>
+              <div
+                className="mt-6 p-6 rounded-2xl text-left shadow-lg 
+                           bg-green-600/10 border border-green-500/30 
+                           backdrop-blur-lg"
+              >
+                <h3 className="font-bold text-green-800 mb-3">
+                  ✅ Traducere audio completă!
+                </h3>
                 <div className="space-y-2 text-sm text-gray-700">
-                  <p><strong>Fișier original:</strong> {result.originalFile}</p>
-                  <p><strong>Limba originală:</strong> {result.originalLanguage}</p>
-                  <p><strong>Limba tradusă:</strong> {result.translatedLanguage}</p>
+                  <p>
+                    <strong>Fișier original:</strong> {result.originalFile}
+                  </p>
+                  <p>
+                    <strong>Limba originală:</strong> {result.originalLanguage}
+                  </p>
+                  <p>
+                    <strong>Limba tradusă:</strong> {result.translatedLanguage}
+                  </p>
                 </div>
+
+                {/* Buton download – la fel ca la TranslateDocsPage, dar pentru audio */}
                 {result.downloadUrl && (
-                  <a
-                    href={`http://localhost:5000/download/${result.downloadUrl}`}
-                    className="mt-4 inline-block px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-                    download
-                  >
-                    📥 Descarcă Audio Tradus
-                  </a>
+                  <div className="button-wrap button-wrap-green w-full mt-6">
+                    <div className="button-shadow"></div>
+                    <a
+                      href={`${BASE_URL}${result.downloadUrl}`}
+                      className="glass-btn glass-btn-green w-full flex items-center justify-center gap-2 leading-none"
+                      download
+                    >
+                      <Download className="w-5 h-5 flex-shrink-0" />
+                      <span className="truncate">
+                        Descarcă Audio Tradus
+                      </span>
+                    </a>
+                  </div>
                 )}
               </div>
             )}
@@ -992,6 +1055,7 @@ const TranslateAudioPage: React.FC = () => {
     </div>
   );
 };
+
 
 // ========== II.3 - Translate Video ==========
 const TranslateVideoPage: React.FC = () => {
