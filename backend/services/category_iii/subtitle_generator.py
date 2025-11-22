@@ -14,6 +14,7 @@ import whisper
 from deep_translator import GoogleTranslator
 
 from services.progress_bar import send_task_progress
+from services.category_v.summary_service import SummaryService
 
 
 class SubtitleGenerator:
@@ -36,6 +37,7 @@ class SubtitleGenerator:
         self._model = None
         self._global_start = None
         self._total_expected = None
+        self._summary_service = SummaryService()
 
     # ------------ Internals ------------
     def _load_model(self):
@@ -119,19 +121,22 @@ class SubtitleGenerator:
         rt_factor = float(os.getenv("SUBTITLE_RT_FACTOR", "1.2"))  # cât de rapid e whisper vs realtime
         translate_factor = float(os.getenv("SUBTITLE_TRANSLATE_FACTOR", "0.25"))  # procent din durată
         burn_factor = float(os.getenv("SUBTITLE_BURN_FACTOR", "0.5"))  # cât durează burn ca fracție din durată
+        summary_factor = float(os.getenv("SUBTITLE_SUMMARY_FACTOR", "0.15"))  # procent din durată pentru rezumat
 
         duration = max(duration, 60.0)  # evită zero; consideră minim 1 minut
 
         est_transcribe = duration * rt_factor
         est_translate = duration * translate_factor
         est_burn = duration * burn_factor if attach_mode == "hard" else 0.0
+        est_summary = duration * summary_factor
         est_overhead = 8.0  # inițializare/model load
 
-        total = est_transcribe + est_translate + est_burn + est_overhead
+        total = est_transcribe + est_translate + est_burn + est_summary + est_overhead
         return {
             "transcribe": est_transcribe,
             "translate": est_translate,
             "burn": est_burn,
+            "summary": est_summary,
             "overhead": est_overhead,
             "total": total,
         }
@@ -167,7 +172,7 @@ class SubtitleGenerator:
         return result
 
     # ------------ API publică ------------
-    def generate(self, filepath: str, lang: str = "ro", attach_mode: str = "soft"):
+    def generate(self, filepath: str, lang: str = "ro", attach_mode: str = "soft", detail_level: str = "medium"):
         """
         Generează subtitrare în română pentru videoclipul dat.
 
@@ -175,6 +180,7 @@ class SubtitleGenerator:
             filepath: calea către fișierul video încărcat.
             lang: limba țintă (implicit română).
             attach_mode: 'soft' -> returnează SRT; 'hard' -> arde subtitrarea în video.
+            detail_level: nivelul de detaliu al rezumatului (brief/medium/deep)
         """
         video_path = Path(filepath)
         attach_mode = (attach_mode or "soft").lower()
@@ -185,9 +191,10 @@ class SubtitleGenerator:
         self._total_expected = timeline["total"]
 
         # Configurăm ponderi pentru progres (sumează la 100)
-        pct_transcribe = 60.0
-        pct_translate = 30.0 if attach_mode != "hard" else 25.0
-        pct_burn = 0.0 if attach_mode != "hard" else 10.0
+        pct_transcribe = 55.0
+        pct_translate = 25.0 if attach_mode != "hard" else 20.0
+        pct_summary = 10.0
+        pct_burn = 0.0 if attach_mode != "hard" else 8.0
         pct_finalize = 100.0 - (pct_transcribe + pct_translate + pct_burn)
 
         send_task_progress(percent=1.0, eta_seconds=timeline["total"], stage="init", detail="pregătire")
@@ -217,6 +224,24 @@ class SubtitleGenerator:
             detail="fișier SRT generat",
         )
 
+        # Rezumat video (folosește textul tradus concatenat)
+        full_text = "\n".join(translated_texts)
+        summary_result = self._run_stage(
+            "rezumat",
+            expected_seconds=timeline.get("summary", max(8.0, duration * 0.1)),
+            base_percent=pct_transcribe + pct_translate,
+            weight_percent=pct_summary,
+            func=lambda: self._summary_service.summarize_content(
+                content_id=video_path.stem,
+                text=full_text,
+                metadata={
+                    "source_type": "video",
+                    "lang": lang,
+                    "detail": detail_level,
+                },
+            ),
+        )
+
         response = {
             "attach_mode": attach_mode,
             "subtitle_file": f"/download/{srt_path.name}",
@@ -224,6 +249,8 @@ class SubtitleGenerator:
             "detected_language": detected_lang,
             "segments": len(segments),
             "note": "Subtitrare generată cu Whisper + traducere automată",
+            "summary": summary_result.get("summary"),
+            "summary_file": f"/download/{summary_result.get('summary_file')}" if summary_result.get("summary_file") else None,
         }
 
         if attach_mode == "hard":
@@ -231,7 +258,7 @@ class SubtitleGenerator:
             self._run_stage(
                 "burn",
                 expected_seconds=timeline["burn"],
-                base_percent=pct_transcribe + pct_translate,
+                base_percent=pct_transcribe + pct_translate + pct_summary,
                 weight_percent=pct_burn,
                 func=lambda: self._burn_subtitles(video_path, srt_path, output_video),
             )

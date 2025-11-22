@@ -1192,6 +1192,7 @@ const TranslateVideoPage: React.FC = () => {
 const SubtitleROPage: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [attachMode, setAttachMode] = useState<string>('soft');
+  const [detailLevel, setDetailLevel] = useState<string>('medium');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
@@ -1200,6 +1201,8 @@ const SubtitleROPage: React.FC = () => {
   const [stage, setStage] = useState<string>("");
   const [detail, setDetail] = useState<string>("");
   const [showProgress, setShowProgress] = useState(false);
+  const [summary, setSummary] = useState<string>("");
+  const [displayedSummary, setDisplayedSummary] = useState<string>("");
 
   useEffect(() => {
     const es = new EventSource("http://127.0.0.1:5000/events");
@@ -1239,6 +1242,8 @@ const SubtitleROPage: React.FC = () => {
       setStage("");
       setDetail("");
       setShowProgress(false);
+      setSummary("");
+      setDisplayedSummary("");
     }
   };
 
@@ -1251,10 +1256,13 @@ const SubtitleROPage: React.FC = () => {
     setStage("pregătire");
     setDetail("");
     setShowProgress(true);
+    setSummary("");
+    setDisplayedSummary("");
 
     try {
-      const data = await uploadFile('/subtitle-ro', file, { attach: attachMode });
+      const data = await uploadFile('/subtitle-ro', file, { attach: attachMode, detail_level: detailLevel });
       setResult(data);
+      if (data.summary) setSummary(data.summary);
       setPercent(100);
       setEta(0);
       setStage("gata");
@@ -1266,8 +1274,26 @@ const SubtitleROPage: React.FC = () => {
     }
   };
 
+  // Efect de scriere pentru rezumat
+  useEffect(() => {
+    if (!summary) {
+      setDisplayedSummary("");
+      return;
+    }
+    setDisplayedSummary("");
+    let idx = 0;
+    const interval = setInterval(() => {
+      idx += 4;
+      setDisplayedSummary(summary.slice(0, idx));
+      if (idx >= summary.length) {
+        clearInterval(interval);
+      }
+    }, 20);
+    return () => clearInterval(interval);
+  }, [summary]);
+
   return (
-    <div className="container mx-auto px-4 py-8 max-w-4xl">
+    <div className="container mx-auto px-4 py-8 max-w-6xl">
       <div className="liquidGlass-wrapper liquidGlass-card rounded-3xl mb-6 shadow-lg fade-up" style={{padding: '1.5rem'}}>
         <div className="liquidGlass-effect" />
         <div className="liquidGlass-tint" />
@@ -1279,119 +1305,208 @@ const SubtitleROPage: React.FC = () => {
             </div>
             <div>
               <h2 className="text-2xl font-bold text-gray-800 mb-2">III.1 - Subtitrare în Limba Originală (RO → RO)</h2>
-              <p className="text-gray-600 mb-2">Generare automată de subtitrare (.srt) în română + rezumat</p>
+              <p className="text-gray-600 mb-2">Generare automată de subtitrare + rezumat video</p>
               <p className="text-xs text-gray-400 font-mono">Endpoint: POST /api/subtitle-ro</p>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="liquidGlass-wrapper liquidGlass-card rounded-3xl shadow-lg fade-up-delay-2" style={{padding: '2rem'}}>
-        <div className="liquidGlass-effect" />
-        <div className="liquidGlass-tint" />
-        <div className="liquidGlass-shine" />
-        <div className="liquidGlass-content">
-          <div className="border-2 border-dashed border-green-300 rounded-xl p-12 text-center">
-            <Upload className="w-16 h-16 mx-auto text-green-400 mb-4" />
-            
-            <div className="mb-6">
-              <label className="block mb-2 font-semibold text-gray-700">Mod atașare subtitrare:</label>
-              <select
-                value={attachMode}
-                onChange={(e) => setAttachMode(e.target.value)}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
-              >
-                <option value="soft">Soft (detașabil - .srt separat)</option>
-                <option value="hard">Hard (burnt-in - încorporat în video)</option>
-              </select>
-            </div>
-
-            <p className="text-gray-600 mb-4">Încarcă video în română (.mp4, .avi, .mov, .mkv)</p>
-
-            <input
-              type="file"
-              accept=".mp4,.avi,.mov,.mkv,.webm"
-              onChange={handleFileChange}
-              className="hidden"
-              id="subtitle-ro-input"
-            />
-
-            <div className="button-wrap button-wrap-green" style={{ display: 'inline-block' }}>
-              <div className="button-shadow"></div>
-              <button 
-                className="glass-btn-green"
-                onClick={() => document.getElementById('subtitle-ro-input')?.click()}
-                type="button"
-              >
-                <span>{file ? `📄 ` : 'Selectează Video'}</span>
-              </button>
-            </div>
-
-            {showProgress && (
-              <div className="mt-6 text-left space-y-2 p-4 bg-white/60 border border-green-100 rounded-xl shadow-sm">
-                <div className="flex justify-between text-sm text-gray-700">
-                  <span className="font-medium">Progres: {percent}% {stage && `(${stage})`}</span>
-                  <span className="text-gray-500">ETA: {formatEta(eta)}</span>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+        <div className="lg:col-span-2">
+          <div className="liquidGlass-wrapper liquidGlass-card rounded-3xl shadow-lg fade-up-delay-2" style={{padding: '2rem'}}>
+            <div className="liquidGlass-effect" />
+            <div className="liquidGlass-tint" />
+            <div className="liquidGlass-shine" />
+            <div className="liquidGlass-content">
+              <div className="border-2 border-dashed border-green-300 rounded-xl p-10 text-center">
+                <Upload className="w-16 h-16 mx-auto text-green-400 mb-4" />
+                
+                <div className="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
+                  <div>
+                    <label className="block mb-2 font-semibold text-gray-700">Mod atașare subtitrare:</label>
+                    <select
+                      value={attachMode}
+                      onChange={(e) => setAttachMode(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                    >
+                      <option value="soft">Soft (detașabil - .srt separat)</option>
+                      <option value="hard">Hard (burnt-in - încorporat în video)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block mb-2 font-semibold text-gray-700">Nivel detaliu rezumat:</label>
+                    <select
+                      value={detailLevel}
+                      onChange={(e) => setDetailLevel(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                    >
+                      <option value="brief">Succint</option>
+                      <option value="medium">Standard</option>
+                      <option value="deep">Detaliat</option>
+                    </select>
+                  </div>
                 </div>
-                {detail && <div className="text-xs text-gray-500">Etapă: {detail}</div>}
-                <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-green-400 to-emerald-500 transition-all"
-                    style={{ width: `${percent}%` }}
-                  />
-                </div>
-              </div>
-            )}
 
-            {file && (
-              <button
-                onClick={handleUpload}
-                disabled={loading}
-                className="mt-4 px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-xl font-medium hover:shadow-lg transition-all disabled:opacity-50"
-              >
-                {loading ? 'Generare subtitrare...' : '🎬 Generează Subtitrare'}
-              </button>
-            )}
+                <p className="text-gray-600 mb-4">Încarcă video în română (.mp4, .avi, .mov, .mkv)</p>
 
-            {error && <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-600">{error}</div>}
-            
-            {result && (
-              <div className="mt-6 p-6 bg-green-50 border border-green-200 rounded-xl text-left">
-                <h3 className="font-bold text-green-800 mb-3">✅ Subtitrare generată!</h3>
-                <div className="space-y-2 text-sm text-gray-700">
-                  <p><strong>Fișier original:</strong> {result.originalFile}</p>
-                  {result.subtitle_file && <p><strong>Fișier SRT:</strong> {result.subtitle_file}</p>}
-                  {result.segments && <p><strong>Total segmente:</strong> {result.segments}</p>}
+                <input
+                  type="file"
+                  accept=".mp4,.avi,.mov,.mkv,.webm"
+                  onChange={handleFileChange}
+                  className="hidden"
+                  id="subtitle-ro-input"
+                />
+
+                <div className="flex flex-col items-center gap-4 max-w-md mx-auto">
+                  <div className="button-wrap button-wrap-green w-full">
+                    <div className="button-shadow"></div>
+                    <button 
+                      className="glass-btn glass-btn-green w-full"
+                      onClick={() => document.getElementById('subtitle-ro-input')?.click()}
+                      type="button"
+                    >
+                      <span className="truncate">{file ? `📄 ${file.name}` : 'Selectează Video'}</span>
+                    </button>
+                  </div>
+
+                  {file && (
+                    <div className="button-wrap button-wrap-purple w-full">
+                      <div className="button-shadow"></div>
+                      <button
+                        onClick={handleUpload}
+                        disabled={loading}
+                        className="glass-btn glass-btn-purple w-full"
+                      >
+                        <span className="truncate">{loading ? 'Procesare...' : '🎬 Subtitrare + Rezumat'}</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
-                {(result.video_file || result.downloadUrl || result.subtitle_file) && (
-                  <a
-                    href={`http://localhost:5000${result.video_file || result.downloadUrl || result.subtitle_file}`}
-                    className="mt-4 inline-block px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-                    download
-                  >
-                    📥 Descarcă rezultat
-                  </a>
+
+                {showProgress && (
+                  <div className="mt-6 text-left space-y-2 p-4 bg-white/60 border border-green-100 rounded-xl shadow-sm">
+                    <div className="flex justify-between text-sm text-gray-700">
+                      <span className="font-medium">Progres: {percent}% {stage && `(${stage})`}</span>
+                      <span className="text-gray-500">ETA: {formatEta(eta)}</span>
+                    </div>
+                    {detail && <div className="text-xs text-gray-500">Etapă: {detail}</div>}
+                    <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-green-400 to-emerald-500 transition-all"
+                        style={{ width: `${percent}%` }}
+                      />
+                    </div>
+                  </div>
                 )}
-                {result.subtitle_file && result.video_file && (
-                  <div className="mt-3 flex gap-3">
-                    <a
-                      href={`http://localhost:5000${result.subtitle_file}`}
-                      className="px-4 py-2 bg-white text-green-700 border border-green-400 rounded-lg hover:bg-green-100"
-                      download
-                    >
-                      📄 Descarcă SRT
-                    </a>
-                    <a
-                      href={`http://localhost:5000${result.video_file}`}
-                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-                      download
-                    >
-                      🎬 Video subtitrat
-                    </a>
+
+                {error && <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-600">{error}</div>}
+                
+                {result && (
+                  <div className="mt-6 p-6 bg-green-50 border border-green-200 rounded-xl text-left">
+                    <h3 className="font-bold text-green-800 mb-3">✅ Subtitrare generată!</h3>
+                    <div className="space-y-2 text-sm text-gray-700">
+                      <p><strong>Fișier original:</strong> {result.originalFile}</p>
+                      {result.subtitle_file && <p><strong>Fișier SRT:</strong> {result.subtitle_file}</p>}
+                      {result.segments && <p><strong>Total segmente:</strong> {result.segments}</p>}
+                    </div>
+                    <div className="mt-4 space-y-3">
+                      {(result.video_file || result.downloadUrl || result.subtitle_file) && (
+                        <div className="button-wrap button-wrap-green w-full">
+                          <div className="button-shadow"></div>
+                          <a
+                            href={`http://localhost:5000${result.video_file || result.downloadUrl || result.subtitle_file}`}
+                            className="glass-btn glass-btn-green w-full flex items-center justify-center gap-2 leading-none"
+                            download
+                          >
+                            <Download className="w-5 h-5 flex-shrink-0" />
+                            <span className="truncate">Descarcă rezultat</span>
+                          </a>
+                        </div>
+                      )}
+                      <div className="flex flex-wrap gap-3">
+                        {result.subtitle_file && (
+                          <div className="button-wrap button-wrap-blue">
+                            <div className="button-shadow"></div>
+                            <a
+                              href={`http://localhost:5000${result.subtitle_file}`}
+                              className="glass-btn glass-btn-blue flex items-center gap-2 px-4"
+                              download
+                            >
+                              <Download className="w-4 h-4" />
+                              <span>SRT</span>
+                            </a>
+                          </div>
+                        )}
+                        {result.video_file && (
+                          <div className="button-wrap button-wrap-purple">
+                            <div className="button-shadow"></div>
+                            <a
+                              href={`http://localhost:5000${result.video_file}`}
+                              className="glass-btn glass-btn-purple flex items-center gap-2 px-4"
+                              download
+                            >
+                              <Download className="w-4 h-4" />
+                              <span>Video</span>
+                            </a>
+                          </div>
+                        )}
+                        {result.summary_file && (
+                          <div className="button-wrap button-wrap-green">
+                            <div className="button-shadow"></div>
+                            <a
+                              href={`http://localhost:5000${result.summary_file}`}
+                              className="glass-btn glass-btn-green flex items-center gap-2 px-4"
+                              download
+                            >
+                              <Download className="w-4 h-4" />
+                              <span>Rezumat</span>
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
-            )}
+            </div>
+          </div>
+        </div>
+
+        <div className="lg:col-span-1">
+          <div className="liquidGlass-wrapper liquidGlass-card rounded-3xl shadow-lg fade-up-delay-3 sticky top-6" style={{padding: '1.25rem'}}>
+            <div className="liquidGlass-effect" />
+            <div className="liquidGlass-tint" />
+            <div className="liquidGlass-shine" />
+            <div className="liquidGlass-content">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-emerald-500 font-semibold">Rezumat video</p>
+                  <h3 className="text-lg font-bold text-gray-800">Insight rapid</h3>
+                </div>
+                <span className="text-xs px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">
+                  live typing
+                </span>
+              </div>
+              <div className="p-3 rounded-2xl bg-white/60 border border-emerald-100 shadow-inner min-h-[180px]">
+                {displayedSummary ? (
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed font-mono">{displayedSummary}</p>
+                ) : (
+                  <p className="text-sm text-gray-400 italic">Rezumatul va apărea aici automat după procesare.</p>
+                )}
+              </div>
+              {summary && (
+                <div className="button-wrap button-wrap-green w-full mt-3">
+                  <div className="button-shadow"></div>
+                  <button
+                    onClick={() => navigator.clipboard.writeText(summary)}
+                    className="glass-btn glass-btn-green w-full text-sm"
+                  >
+                    Copiază rezumat
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

@@ -456,6 +456,7 @@ def subtitle_ro():
         
         file = request.files['file']
         attach_mode = request.form.get('attach', 'soft')
+        detail_level = request.form.get('detail_level', 'medium')
         
         if not validate_file(file, 'subtitle'):
             return jsonify({'error': 'Invalid file type'}), 400
@@ -464,10 +465,10 @@ def subtitle_ro():
         filepath = os.path.join(UPLOAD_FOLDER, filename)
         file.save(filepath)
         
-        print(f"\n[SUBTITLE] Mode: {attach_mode}, File: {filename}")
+        print(f"\n[SUBTITLE] Mode: {attach_mode}, Detail: {detail_level}, File: {filename}")
         
         generator = SubtitleGenerator()
-        result = generator.generate(filepath, lang='ro', attach_mode=attach_mode)
+        result = generator.generate(filepath, lang='ro', attach_mode=attach_mode, detail_level=detail_level)
         
         return jsonify({
             'service': 'Subtitle Generation',

@@ -19,7 +19,7 @@ class SummaryService:
         Args:
             api_key: API key pentru Google Gemini (opțional)
         """
-        self.api_key = api_key or os.getenv('GOOGLE_API_KEY', '')
+        self.api_key = "AIzaSyCrL0AA-rH5PYsGQ4F2OM1YjL8xtKn9K-I"
         self.output_dir = Path('processed')
         self.output_dir.mkdir(exist_ok=True)
         
