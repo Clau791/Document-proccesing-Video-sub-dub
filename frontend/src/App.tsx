@@ -1195,11 +1195,50 @@ const SubtitleROPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const [percent, setPercent] = useState(0);
+  const [eta, setEta] = useState<number | null>(null);
+  const [stage, setStage] = useState<string>("");
+  const [detail, setDetail] = useState<string>("");
+  const [showProgress, setShowProgress] = useState(false);
+
+  useEffect(() => {
+    const es = new EventSource("http://127.0.0.1:5000/events");
+    es.onmessage = (evt) => {
+      try {
+        const data = JSON.parse(evt.data);
+        if (data.type === "task_progress") {
+          if (typeof data.percent === "number") setPercent(Math.round(data.percent));
+          if (typeof data.eta_seconds === "number") setEta(data.eta_seconds);
+          if (typeof data.stage === "string") setStage(data.stage);
+          if (typeof data.detail === "string") setDetail(data.detail);
+          setShowProgress(true);
+        }
+      } catch {
+        /* ignore */
+      }
+    };
+    es.onerror = () => es.close();
+    return () => es.close();
+  }, []);
+
+  const formatEta = (seconds: number | null) => {
+    if (seconds === null) return "";
+    const s = Math.max(0, Math.round(seconds));
+    const m = Math.floor(s / 60);
+    const rem = s % 60;
+    return `${m}m ${rem.toString().padStart(2, '0')}s`;
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setFile(e.target.files[0]);
       setError(null);
+      setResult(null);
+      setPercent(0);
+      setEta(null);
+      setStage("");
+      setDetail("");
+      setShowProgress(false);
     }
   };
 
@@ -1207,10 +1246,19 @@ const SubtitleROPage: React.FC = () => {
     if (!file) return;
     setLoading(true);
     setError(null);
+    setPercent(0);
+    setEta(null);
+    setStage("pregătire");
+    setDetail("");
+    setShowProgress(true);
 
     try {
       const data = await uploadFile('/subtitle-ro', file, { attach: attachMode });
       setResult(data);
+      setPercent(100);
+      setEta(0);
+      setStage("gata");
+      setDetail("complet");
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -1279,6 +1327,22 @@ const SubtitleROPage: React.FC = () => {
               </button>
             </div>
 
+            {showProgress && (
+              <div className="mt-6 text-left space-y-2 p-4 bg-white/60 border border-green-100 rounded-xl shadow-sm">
+                <div className="flex justify-between text-sm text-gray-700">
+                  <span className="font-medium">Progres: {percent}% {stage && `(${stage})`}</span>
+                  <span className="text-gray-500">ETA: {formatEta(eta)}</span>
+                </div>
+                {detail && <div className="text-xs text-gray-500">Etapă: {detail}</div>}
+                <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-green-400 to-emerald-500 transition-all"
+                    style={{ width: `${percent}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
             {file && (
               <button
                 onClick={handleUpload}
@@ -1296,17 +1360,35 @@ const SubtitleROPage: React.FC = () => {
                 <h3 className="font-bold text-green-800 mb-3">✅ Subtitrare generată!</h3>
                 <div className="space-y-2 text-sm text-gray-700">
                   <p><strong>Fișier original:</strong> {result.originalFile}</p>
-                  {result.subtitleFile && <p><strong>Fișier SRT:</strong> {result.subtitleFile}</p>}
-                  {result.totalSegments && <p><strong>Total segmente:</strong> {result.totalSegments}</p>}
+                  {result.subtitle_file && <p><strong>Fișier SRT:</strong> {result.subtitle_file}</p>}
+                  {result.segments && <p><strong>Total segmente:</strong> {result.segments}</p>}
                 </div>
-                {result.downloadUrl && (
+                {(result.video_file || result.downloadUrl || result.subtitle_file) && (
                   <a
-                    href={`http://localhost:5000/download/${result.downloadUrl}`}
+                    href={`http://localhost:5000${result.video_file || result.downloadUrl || result.subtitle_file}`}
                     className="mt-4 inline-block px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
                     download
                   >
-                    📥 Descarcă Video cu Subtitrare
+                    📥 Descarcă rezultat
                   </a>
+                )}
+                {result.subtitle_file && result.video_file && (
+                  <div className="mt-3 flex gap-3">
+                    <a
+                      href={`http://localhost:5000${result.subtitle_file}`}
+                      className="px-4 py-2 bg-white text-green-700 border border-green-400 rounded-lg hover:bg-green-100"
+                      download
+                    >
+                      📄 Descarcă SRT
+                    </a>
+                    <a
+                      href={`http://localhost:5000${result.video_file}`}
+                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                      download
+                    >
+                      🎬 Video subtitrat
+                    </a>
+                  </div>
                 )}
               </div>
             )}

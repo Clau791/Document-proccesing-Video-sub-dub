@@ -44,3 +44,21 @@ def send_pages_progress(done: int, total: int):
         "percent": max(0, min(100, percent)),
         "ts": time.time()
     })
+
+
+def send_task_progress(percent: float, eta_seconds: float, stage: str = "", detail: str = ""):
+    """
+    Trimite progres generic (bară de loading) cu procent și timp rămas estimat.
+    - percent: 0..100 (float)
+    - eta_seconds: timp rămas estimat (secunde, poate fi zecimal)
+    - stage/detail: mesaje opționale pentru UI
+    """
+    payload = {
+        "type": "task_progress",
+        "percent": max(0.0, min(100.0, float(percent))),
+        "eta_seconds": max(0.0, float(eta_seconds)),
+        "stage": stage,
+        "detail": detail,
+        "ts": time.time(),
+    }
+    _events.put(payload)

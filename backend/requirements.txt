@@ -1,73 +1,47 @@
-# Flask - Framework pentru web server Python
-flask==3.0.0
+# Testat pe Python 3.11/3.12. Unele biblioteci (torch/whisper/PyMuPDF) nu au încă wheel oficial pentru Python 3.14.
 
-# Flask-CORS - Permite comunicarea între frontend (5173) și backend (3000)
-flask-cors==4.0.0
+# --- Core web ---
+flask==3.0.3
+flask-cors==4.0.1
+flask-socketio==5.3.6
+requests==2.32.3
+python-dotenv==1.0.1
 
-# Flask-SocketIO - Pentru real-time communication (progress bars, live updates)
-flask-socketio==5.3.5
+# --- LLM și embeddings (necesită torch) ---
+google-generativeai==0.7.2
+sentence-transformers==3.0.1 ; python_version < "3.13"
+torch==2.9.1
+transformers==4.44.2 ; python_version < "3.13"
+numpy==2.1.2
 
-# Requests - Pentru a face HTTP requests către API-ul extern
-requests==2.31.0
-
-# Python-dotenv - Pentru a citi fișiere .env (opțional)
-python-dotenv==1.0.0
-
-# ========== CATEGORIA V: Dependențe pentru Rezumare, Clasificare, Căutare Semantică ==========
-
-# Google Generative AI (Gemini) - Pentru rezumare și clasificare inteligentă
-google-generativeai==0.3.2
-
-# Sentence Transformers - Pentru embeddings semantice (căutare vectorială)
-sentence-transformers==2.2.2
-
-# NumPy - Pentru operații vectoriale și calcule numerice
-numpy==1.24.3
-
-# SQLite3 - Vine implicit cu Python, dar asigură compatibilitate
-# sqlite3 este built-in în Python standard library
-
-# ========== Dependențe opționale pentru categoriile I-IV (dacă nu sunt deja instalate) ==========
-
-# PyPDF2 / pdfplumber - Pentru procesare PDF
+# --- Procesare documente / imagini ---
 PyPDF2==3.0.1
-pdfplumber==0.10.3
-
-# python-docx - Pentru procesare Word
-python-docx==1.1.0
-
-# python-pptx - Pentru procesare PowerPoint
+pdfplumber==0.11.4
+PyMuPDF==1.24.11
+python-docx==1.1.2
 python-pptx==0.6.23
+Pillow==11.0.0 ; python_version < "3.13"
+pytesseract==0.3.13
+reportlab==4.2.5
 
-# Pillow - Pentru procesare imagini
-Pillow==10.1.0
-
-# pytesseract - Pentru OCR (necesită Tesseract instalat separat)
-pytesseract==0.3.10
-
-# moviepy - Pentru procesare video
+# --- Procesare media (audio/video/subtitrări) ---
 moviepy==1.0.3
-
-# SpeechRecognition - Pentru ASR (Automatic Speech Recognition)
-SpeechRecognition==3.10.0
-
-# pydub - Pentru procesare audio
 pydub==0.25.1
-
-# gTTS - Pentru text-to-speech (Google TTS)
-gTTS==2.4.0
-
-# deep-translator - Pentru traduceri
-deep-translator==1.11.4
-
-# ffmpeg-python - Wrapper pentru FFmpeg (necesită FFmpeg instalat separat)
 ffmpeg-python==0.2.0
+librosa==0.10.2.post1 ; python_version < "3.14"
+soundfile==0.12.1 ; python_version < "3.14"
+SpeechRecognition==3.10.4
+openai-whisper==20231117 ; python_version < "3.13"
+pysubs2==1.6.1
 
-# tqdm - Pentru progress bars în terminal
-tqdm==4.66.1
+# --- Traducere / utilitare text ---
+gTTS==2.5.3
+deep-translator==1.11.4
+tqdm==4.66.5
 
-# ========== Note ==========
-# 1. Tesseract OCR trebuie instalat separat: https://github.com/tesseract-ocr/tesseract
-# 2. FFmpeg trebuie instalat separat: https://ffmpeg.org/download.html
-# 3. Pentru embeddings, modelul all-MiniLM-L6-v2 va fi descărcat automat la prima utilizare (~80MB)
-# 4. Pentru Gemini API, configurați GOOGLE_API_KEY în .env sau environment variables
+# Note rapide:
+# 1. Instalează pe un mediu Python 3.11 (recomandat) pentru a evita erori de build pe 3.14.
+# 2. Tesseract OCR trebuie instalat separat: https://github.com/tesseract-ocr/tesseract
+# 3. FFmpeg trebuie instalat separat: https://ffmpeg.org/download.html
+# 4. Pentru embeddings, modelul all-MiniLM-L6-v2 va fi descărcat automat la prima utilizare (~80MB)
+# 5. Pentru Gemini API, configurează GOOGLE_API_KEY în .env sau variabile de mediu

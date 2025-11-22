@@ -6,13 +6,64 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+pip-log.txt
+pip-delete-this-directory.txt
 
+# Dependencies / builds
 node_modules
+/frontend/node_modules
 dist
 dist-ssr
+/frontend/dist
+/frontend/.vite
 *.local
 
-# Editor directories and files
+# Python artifacts
+__pycache__/
+backend/**/__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+
+# Virtual envs
+.venv/
+venv/
+env/
+.Python
+.python-version
+
+# Env/config secrets
+.env
+.env.*
+
+# Backend generated data
+backend/uploads/
+backend/processed/
+backend/cache/
+backend/.DS_Store
+
+# Media / large artifacts
+*.mp3
+*.wav
+*.m4a
+*.ogg
+*.flac
+*.mp4
+*.mkv
+*.avi
+*.webm
+*.mov
+*.srt
+*.vtt
+*.ass
+*.zip
+*.tmp
+
+# Editor / OS
 .vscode/*
 !.vscode/extensions.json
 .idea
