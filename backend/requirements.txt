@@ -4,8 +4,70 @@ flask==3.0.0
 # Flask-CORS - Permite comunicarea între frontend (5173) și backend (3000)
 flask-cors==4.0.0
 
+# Flask-SocketIO - Pentru real-time communication (progress bars, live updates)
+flask-socketio==5.3.5
+
 # Requests - Pentru a face HTTP requests către API-ul extern
 requests==2.31.0
 
 # Python-dotenv - Pentru a citi fișiere .env (opțional)
 python-dotenv==1.0.0
+
+# ========== CATEGORIA V: Dependențe pentru Rezumare, Clasificare, Căutare Semantică ==========
+
+# Google Generative AI (Gemini) - Pentru rezumare și clasificare inteligentă
+google-generativeai==0.3.2
+
+# Sentence Transformers - Pentru embeddings semantice (căutare vectorială)
+sentence-transformers==2.2.2
+
+# NumPy - Pentru operații vectoriale și calcule numerice
+numpy==1.24.3
+
+# SQLite3 - Vine implicit cu Python, dar asigură compatibilitate
+# sqlite3 este built-in în Python standard library
+
+# ========== Dependențe opționale pentru categoriile I-IV (dacă nu sunt deja instalate) ==========
+
+# PyPDF2 / pdfplumber - Pentru procesare PDF
+PyPDF2==3.0.1
+pdfplumber==0.10.3
+
+# python-docx - Pentru procesare Word
+python-docx==1.1.0
+
+# python-pptx - Pentru procesare PowerPoint
+python-pptx==0.6.23
+
+# Pillow - Pentru procesare imagini
+Pillow==10.1.0
+
+# pytesseract - Pentru OCR (necesită Tesseract instalat separat)
+pytesseract==0.3.10
+
+# moviepy - Pentru procesare video
+moviepy==1.0.3
+
+# SpeechRecognition - Pentru ASR (Automatic Speech Recognition)
+SpeechRecognition==3.10.0
+
+# pydub - Pentru procesare audio
+pydub==0.25.1
+
+# gTTS - Pentru text-to-speech (Google TTS)
+gTTS==2.4.0
+
+# deep-translator - Pentru traduceri
+deep-translator==1.11.4
+
+# ffmpeg-python - Wrapper pentru FFmpeg (necesită FFmpeg instalat separat)
+ffmpeg-python==0.2.0
+
+# tqdm - Pentru progress bars în terminal
+tqdm==4.66.1
+
+# ========== Note ==========
+# 1. Tesseract OCR trebuie instalat separat: https://github.com/tesseract-ocr/tesseract
+# 2. FFmpeg trebuie instalat separat: https://ffmpeg.org/download.html
+# 3. Pentru embeddings, modelul all-MiniLM-L6-v2 va fi descărcat automat la prima utilizare (~80MB)
+# 4. Pentru Gemini API, configurați GOOGLE_API_KEY în .env sau environment variables
