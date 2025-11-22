@@ -22,8 +22,9 @@ from services.category_i.image_ocr import ImageOCR
 from services.category_ii.document_translator import translate_document
 from services.category_ii.audio_translator import AudioTranslator
 from services.category_ii.video_translator import VideoTranslator
+from services.category_iii.video_redubber import VideoRedubber
 from services.category_iii.subtitle_generator import SubtitleGenerator
-# from backend.services.category_iii.video_redubber import VideoRedubber
+from services.category_iii.video_redubber import VideoRedubber
 from services.category_iv.live_subtitle import LiveSubtitleEngine
 from services.progress_bar import progress_bp
 # Import sistemul optimizat de subtitrare
@@ -327,7 +328,7 @@ def translate_doc():
             return jsonify({'error': 'No file provided'}), 400
         
         file = request.files['file']
-        src_lang = request.form.get('src_lang', 'en').lower()
+        src_lang = request.form.get('src_lang', 'auto').lower()
         
         if not validate_file(file, 'translate-doc'):
             return jsonify({'error': 'Invalid file type'}), 400
@@ -379,7 +380,7 @@ def translate_audio():
             return jsonify({'error': 'No file provided'}), 400
         
         file = request.files['file']
-        src_lang = request.form.get('src_lang', 'en').lower()
+        src_lang = request.form.get('src_lang', 'auto').lower()
         
         if not validate_file(file, 'translate-audio'):
             return jsonify({'error': 'Invalid file type'}), 400
@@ -482,40 +483,49 @@ def subtitle_ro():
         print(f"[SUBTITLE] ERROR: {e}")
         return jsonify({'error': str(e)}), 500
 
-# @app.route('/api/redub-video', methods=['POST'])
-# def redub_video():
-#     """III.2: Redublare Video"""
-#     try:
-#         if 'file' not in request.files:
-#             return jsonify({'error': 'No file provided'}), 400
+@app.route('/api/redub-video', methods=['POST'])
+def redub_video():
+    """III.2: Redublare Video cu detectare automată a limbii și TTS local (RTX-ready)."""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
         
-#         file = request.files['file']
-#         src_lang = request.form.get('src_lang', 'ro').lower()
-#         dest_lang = request.form.get('dest_lang', 'en').lower()
+        file = request.files['file']
+        voice_sample = request.files.get('voice_sample')  # opțional pentru voice cloning
+        dest_lang = request.form.get('dest_lang', 'ro').lower()
         
-#         if not validate_file(file, 'redub'):
-#             return jsonify({'error': 'Invalid file type'}), 400
+        if not validate_file(file, 'redub'):
+            return jsonify({'error': 'Invalid file type'}), 400
         
-#         filename = generate_unique_filename(file.filename)
-#         filepath = os.path.join(UPLOAD_FOLDER, filename)
-#         file.save(filepath)
+        filename = generate_unique_filename(file.filename)
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
+        file.save(filepath)
+
+        speaker_wav_path = None
+        if voice_sample:
+            speaker_name = f"{Path(filename).stem}_voice.wav"
+            speaker_wav_path = os.path.join(UPLOAD_FOLDER, speaker_name)
+            voice_sample.save(speaker_wav_path)
         
-#         print(f"\n[REDUB] {src_lang.upper()} → {dest_lang.upper()}: {filename}")
+        print(f"\n[REDUB] AUTO → {dest_lang.upper()}: {filename}")
         
-#         redubber = VideoRedubber()
-#         result = redubber.redub(filepath, src_lang=src_lang, dest_lang=dest_lang)
+        redubber = VideoRedubber()
+        result = redubber.redub(filepath, dest_lang=dest_lang, speaker_wav=speaker_wav_path)
         
-#         return jsonify({
-#             'service': 'Video Redubbing',
-#             'originalFile': filename,
-#             'downloadUrl': result.get('video_file', ''),
-#             'status': 'success',
-#             **result
-#         }), 200
+        return jsonify({
+            'service': 'Video Redub',
+            'originalFile': filename,
+            'originalLanguage': result.get('detected_language', 'auto').upper(),
+            'targetLanguage': dest_lang.upper(),
+            'downloadUrl': result.get('video_file', ''),
+            'subtitleUrl': result.get('subtitle_file', ''),
+            'status': 'success',
+            **result
+        }), 200
         
-#     except Exception as e:
-#         print(f"[REDUB] ERROR: {e}")
-#         return jsonify({'error': str(e)}), 500
+    except Exception as e:
+        print(f"[REDUB] ERROR: {e}")
+        return jsonify({'error': str(e)}), 500
 
 # ============================================
 # CATEGORIA IV: LIVE SUBTITLE

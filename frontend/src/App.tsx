@@ -30,15 +30,6 @@ import './styles/glass_buttons.css';
 const BASE_URL = 'http://localhost:5000';
 const API_URL = `${BASE_URL}/api`;
 
-type Lang = "en" | "zh" | "ru" | "ja" | "ro";
-const LANG_LABEL: Record<Lang, string> = {
-  en: "🇬🇧 Engleză (EN)",
-  zh: "🇨🇳 Chineză (ZH)",
-  ru: "🇷🇺 Rusă (RU)",
-  ja: "🇯🇵 Japoneză (JA)",
-  ro: "🇷🇴 Română (RO)",
-};
-
 // ========== UTILITY FUNCTIONS ==========
 
 // Utility pentru upload
@@ -243,11 +234,11 @@ const HomeCards: React.FC<{ onNavigate: (page: string) => void }> = ({ onNavigat
     {
       id: "category-iii",
       title: "III. Subtitrare și Redublaj",
-      description: "Subtitrare automată RO → RO și redublare video",
+      description: "Subtitrare automată și redublare video",
       icon: Subtitles,
       color: "from-green-400 to-emerald-400",
       subcategories: [
-        { id: "subtitle-ro", name: "Subtitrare RO → RO", icon: Subtitles },
+        { id: "subtitle-ro", name: "Subtitrare ", icon: Subtitles },
         { id: "redub-video", name: "Redublare video", icon: Video }
       ]
     },
@@ -865,7 +856,6 @@ const TranslateDocsPage: React.FC = () => {
 // ========== II.2 - Translate Audio ==========
 const TranslateAudioPage: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
-  const [srcLang, setSrcLang] = useState<string>('en');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
@@ -885,7 +875,7 @@ const TranslateAudioPage: React.FC = () => {
     setResult(null);
 
     try {
-      const data = await uploadFile('/translate-audio', file, { src_lang: srcLang });
+      const data = await uploadFile('/translate-audio', file);
       setResult(data);
     } catch (err: any) {
       setError(err.message);
@@ -936,23 +926,6 @@ const TranslateAudioPage: React.FC = () => {
           <div className="border-2 border-dashed border-purple-300 rounded-xl p-12 text-center">
             <Upload className="w-16 h-16 mx-auto text-purple-400 mb-4" />
 
-            {/* Limba sursă */}
-            <div className="mb-6 max-w-md mx-auto text-left">
-              <label className="block mb-2 font-semibold text-gray-700">
-                Limba sursă:
-              </label>
-              <select
-                value={srcLang}
-                onChange={(e) => setSrcLang(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
-              >
-                <option value="en">🇬🇧 Engleză</option>
-                <option value="zh">🇨🇳 Chineză</option>
-                <option value="ru">🇷🇺 Rusă</option>
-                <option value="ja">🇯🇵 Japoneză</option>
-              </select>
-            </div>
-
             <p className="text-gray-600 mb-4">
               Încarcă fișiere audio (.mp3, .wav, .m4a, .ogg, .flac)
             </p>
@@ -995,7 +968,7 @@ const TranslateAudioPage: React.FC = () => {
                     <span className="truncate">
                       {loading
                         ? 'Traducere audio în curs...'
-                        : `Tradu Audio ${srcLang.toUpperCase()} → RO`}
+                        : 'Tradu Audio (detectare automată) → RO'}
                     </span>
                   </button>
                 </div>
@@ -1060,7 +1033,6 @@ const TranslateAudioPage: React.FC = () => {
 // ========== II.3 - Translate Video ==========
 const TranslateVideoPage: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
-  const [srcLang, setSrcLang] = useState<string>('en');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
@@ -1078,7 +1050,7 @@ const TranslateVideoPage: React.FC = () => {
     setError(null);
 
     try {
-      const data = await uploadFile('/translate-video', file, { src_lang: srcLang });
+      const data = await uploadFile('/translate-video', file);
       setResult(data);
     } catch (err: any) {
       setError(err.message);
@@ -1114,20 +1086,6 @@ const TranslateVideoPage: React.FC = () => {
         <div className="liquidGlass-content">
           <div className="border-2 border-dashed border-purple-300 rounded-xl p-12 text-center">
             <Upload className="w-16 h-16 mx-auto text-purple-400 mb-4" />
-            
-            <div className="mb-6">
-              <label className="block mb-2 font-semibold text-gray-700">Limba sursă:</label>
-              <select
-                value={srcLang}
-                onChange={(e) => setSrcLang(e.target.value)}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
-              >
-                <option value="en">🇬🇧 Engleză</option>
-                <option value="zh">🇨🇳 Chineză</option>
-                <option value="ru">🇷🇺 Rusă</option>
-                <option value="ja">🇯🇵 Japoneză</option>
-              </select>
-            </div>
 
             <p className="text-gray-600 mb-4">Încarcă fișiere video (.mp4, .avi, .mov, .mkv)</p>
 
@@ -1156,7 +1114,7 @@ const TranslateVideoPage: React.FC = () => {
                 disabled={loading}
                 className="mt-4 px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-medium hover:shadow-lg transition-all disabled:opacity-50"
               >
-                {loading ? 'Traducere video...' : `📤 Traduce Video ${srcLang.toUpperCase()} → RO`}
+                {loading ? 'Traducere video...' : '📤 Traduce Video (detectare automată) → RO'}
               </button>
             )}
 
@@ -1304,7 +1262,7 @@ const SubtitleROPage: React.FC = () => {
               <Subtitles className="w-8 h-8 text-white" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-gray-800 mb-2">III.1 - Subtitrare în Limba Originală (RO → RO)</h2>
+              <h2 className="text-2xl font-bold text-gray-800 mb-2">III.1 - Subtitrare Video</h2>
               <p className="text-gray-600 mb-2">Generare automată de subtitrare + rezumat video</p>
               <p className="text-xs text-gray-400 font-mono">Endpoint: POST /api/subtitle-ro</p>
             </div>
@@ -1517,7 +1475,6 @@ const SubtitleROPage: React.FC = () => {
 // ========== III.2 - Redub Video ==========
 const RedubVideoPage: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
-  const [srcLang, setSrcLang] = useState<string>('ro');
   const [destLang, setDestLang] = useState<string>('en');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
@@ -1536,7 +1493,7 @@ const RedubVideoPage: React.FC = () => {
     setError(null);
 
     try {
-      const data = await uploadFile('/redub-video', file, { src_lang: srcLang, dest_lang: destLang });
+      const data = await uploadFile('/redub-video', file, { dest_lang: destLang });
       setResult(data);
     } catch (err: any) {
       setError(err.message);
@@ -1574,17 +1531,6 @@ const RedubVideoPage: React.FC = () => {
             <Upload className="w-16 h-16 mx-auto text-green-400 mb-4" />
             
             <div className="mb-6 flex gap-4 justify-center">
-              <div>
-                <label className="block mb-2 font-semibold text-gray-700">Din limba:</label>
-                <select
-                  value={srcLang}
-                  onChange={(e) => setSrcLang(e.target.value)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
-                >
-                  <option value="ro">🇷🇴 Română</option>
-                  <option value="en">🇬🇧 Engleză</option>
-                </select>
-              </div>
               <div>
                 <label className="block mb-2 font-semibold text-gray-700">În limba:</label>
                 <select
@@ -1625,7 +1571,7 @@ const RedubVideoPage: React.FC = () => {
                 disabled={loading}
                 className="mt-4 px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-xl font-medium hover:shadow-lg transition-all disabled:opacity-50"
               >
-                {loading ? 'Redublare în curs...' : `🎙️ Redublează ${srcLang.toUpperCase()} → ${destLang.toUpperCase()}`}
+                {loading ? 'Redublare în curs...' : `🎙️ Redublează (detectare automată) → ${destLang.toUpperCase()}`}
               </button>
             )}
 
