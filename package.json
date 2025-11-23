@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "description": "Document processing for video and audio",
   "scripts": {
-    "dev": "concurrently --shell pwsh \"npm run backend\" \"npm run frontend\" --names \"BACKEND,FRONTEND\" --prefix-colors \"bgBlue.bold,bgMagenta.bold\"",
-    "backend": "cd backend && python -u app.py",
+    "dev": "concurrently --names \"BACKEND,FRONTEND\" --prefix-colors \"bgBlue.bold,bgMagenta.bold\" \"npm run backend\" \"npm run frontend\"",
+    "backend": "cd backend && . .venv/bin/activate && python3 app.py",
     "frontend": "cd frontend && npm run dev",
     "install-all": "npm run install-backend && npm run install-frontend",
     "install-backend": "cd backend && pip install -r requirements.txt",

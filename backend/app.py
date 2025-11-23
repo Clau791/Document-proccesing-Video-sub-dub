@@ -22,11 +22,11 @@ from services.category_i.image_ocr import ImageOCR
 from services.category_ii.document_translator import translate_document
 from services.category_ii.audio_translator import AudioTranslator
 from services.category_ii.video_translator import VideoTranslator
-from services.category_iii.video_redubber import VideoRedubber
 from services.category_iii.subtitle_generator import SubtitleGenerator
 from services.category_iii.video_redubber import VideoRedubber
 from services.category_iv.live_subtitle import LiveSubtitleEngine
 from services.progress_bar import progress_bp
+from history import add_history, get_history
 # Import sistemul optimizat de subtitrare
 # from backend.subtitles.sub import OptimizedSubtitleSystem
 
@@ -103,6 +103,9 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 for directory in [UPLOAD_FOLDER, PROCESSED_FOLDER, CACHE_FOLDER]:
     Path(directory).mkdir(parents=True, exist_ok=True)
 
+# Progres SSE
+app.register_blueprint(progress_bp)
+
 # Inițializare servicii
 # live_engine = LiveSubtitleEngine()
 
@@ -166,6 +169,18 @@ def llm_status():
             'status': 'error',
             'error': str(e)
         }), 500
+
+
+@app.route('/api/history', methods=['GET'])
+def history():
+    """Istoric operațiuni recente"""
+    try:
+        limit = int(request.args.get('limit', 50))
+        data = get_history(limit=limit)
+        return jsonify({'items': data}), 200
+    except Exception as e:
+        print(f"[HISTORY] ERROR: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/validate-translation', methods=['POST'])
 def validate_translation():
@@ -240,13 +255,15 @@ def ppt_analysis():
         analyzer = PPTAnalyzer()
         result = analyzer.analyze(filepath)
         
-        return jsonify({
+        response_payload = {
             'service': 'PowerPoint Analysis',
             'originalFile': filename,
             'downloadUrl': result.get('output_file', ''),
             'status': 'success',
             **result
-        }), 200
+        }
+        add_history('ppt-analysis', filename, response_payload.get('downloadUrl'))
+        return jsonify(response_payload), 200
         
     except Exception as e:
         print(f"[PPT] ERROR: {e}")
@@ -272,13 +289,15 @@ def document_analysis():
         parser = DocumentParser()
         result = parser.parse(filepath)
         
-        return jsonify({
+        response_payload = {
             'service': 'Document Analysis',
             'originalFile': filename,
             'downloadUrl': result.get('output_file', ''),
             'status': 'success',
             **result
-        }), 200
+        }
+        add_history('document-analysis', filename, response_payload.get('downloadUrl'))
+        return jsonify(response_payload), 200
         
     except Exception as e:
         print(f"[DOC] ERROR: {e}")
@@ -304,13 +323,15 @@ def image_ocr():
         ocr = ImageOCR()
         result = ocr.extract_text(filepath)
         
-        return jsonify({
+        response_payload = {
             'service': 'Image OCR',
             'originalFile': filename,
             'downloadUrl': result.get('output_file', ''),
             'status': 'success',
             **result
-        }), 200
+        }
+        add_history('image-ocr', filename, response_payload.get('downloadUrl'))
+        return jsonify(response_payload), 200
         
     except Exception as e:
         print(f"[OCR] ERROR: {e}")
@@ -365,6 +386,7 @@ def translate_doc():
             'translated_blocks': result.get('translated_blocks')
         }
 
+        add_history('translate-document', filename, response_data.get('downloadUrl'), meta={'source_lang': src_lang, 'target_lang': 'ro'})
         return jsonify(response_data), 200
         # --- 👆 Sfârșitul corecției 👆 ---
         
@@ -394,7 +416,7 @@ def translate_audio():
         translator = AudioTranslator()
         result = translator.translate(filepath, src_lang=src_lang, dest_lang='ro')
         
-        return jsonify({
+        response_payload = {
             'service': 'Audio Translation',
             'originalFile': filename,
             'originalLanguage': src_lang.upper(),
@@ -402,7 +424,9 @@ def translate_audio():
             'downloadUrl': result.get('audio_file', ''),
             'status': 'success',
             **result
-        }), 200
+        }
+        add_history('translate-audio', filename, response_payload.get('downloadUrl'), meta={'detected': result.get('detected_lang'), 'target_lang': 'ro'})
+        return jsonify(response_payload), 200
         
     except Exception as e:
         print(f"[TRANSLATE AUDIO] ERROR: {e}")
@@ -430,7 +454,7 @@ def translate_video():
         translator = VideoTranslator()
         result = translator.translate(filepath, src_lang=src_lang, dest_lang='ro')
         
-        return jsonify({
+        response_payload = {
             'service': 'Video Translation',
             'originalFile': filename,
             'originalLanguage': src_lang.upper(),
@@ -438,7 +462,9 @@ def translate_video():
             'downloadUrl': result.get('video_file', ''),
             'status': 'success',
             **result
-        }), 200
+        }
+        add_history('translate-video', filename, response_payload.get('downloadUrl'), meta={'target_lang': 'ro'})
+        return jsonify(response_payload), 200
         
     except Exception as e:
         print(f"[TRANSLATE VIDEO] ERROR: {e}")
@@ -471,13 +497,15 @@ def subtitle_ro():
         generator = SubtitleGenerator()
         result = generator.generate(filepath, lang='ro', attach_mode=attach_mode, detail_level=detail_level)
         
-        return jsonify({
+        response_payload = {
             'service': 'Subtitle Generation',
             'originalFile': filename,
             'downloadUrl': result.get('video_file', ''),
             'status': 'success',
             **result
-        }), 200
+        }
+        add_history('subtitle-ro', filename, response_payload.get('downloadUrl'), meta={'attach': attach_mode, 'detail': detail_level})
+        return jsonify(response_payload), 200
         
     except Exception as e:
         print(f"[SUBTITLE] ERROR: {e}")
@@ -512,7 +540,7 @@ def redub_video():
         redubber = VideoRedubber()
         result = redubber.redub(filepath, dest_lang=dest_lang, speaker_wav=speaker_wav_path)
         
-        return jsonify({
+        response_payload = {
             'service': 'Video Redub',
             'originalFile': filename,
             'originalLanguage': result.get('detected_language', 'auto').upper(),
@@ -521,7 +549,9 @@ def redub_video():
             'subtitleUrl': result.get('subtitle_file', ''),
             'status': 'success',
             **result
-        }), 200
+        }
+        add_history('redub-video', filename, response_payload.get('downloadUrl'), meta={'target_lang': dest_lang})
+        return jsonify(response_payload), 200
         
     except Exception as e:
         print(f"[REDUB] ERROR: {e}")
@@ -648,7 +678,6 @@ if __name__ == '__main__':
     print("   • /api/live-start           - Live Start")
     print("   • /api/live-stop            - Live Stop")
     print("="*60 + "\n")
-    app.register_blueprint(progress_bp)
 
     socketio.run(
         app,
