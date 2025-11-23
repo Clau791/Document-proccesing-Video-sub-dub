@@ -15,6 +15,7 @@ import TranslateVideoPage from "./pages/TranslateVideoPage";
 import SubtitleROPage from "./pages/SubtitleROPage";
 import RedubVideoPage from "./pages/RedubVideoPage";
 import LiveSubtitlePage from "./pages/LiveSubtitlePage";
+import SearchPage from "./pages/SearchPage";
 
 const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState("home");
@@ -45,6 +46,7 @@ const App: React.FC = () => {
       case "subtitle-ro": return <SubtitleROPage />;
       case "redub-video": return <RedubVideoPage />;
       case "live-subtitle": return <LiveSubtitlePage />;
+      case "search": return <SearchPage />;
       default: return <HomePage onNavigate={setCurrentPage} />;
     }
   };

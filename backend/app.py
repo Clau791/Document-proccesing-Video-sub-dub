@@ -26,7 +26,7 @@ from services.category_iii.subtitle_generator import SubtitleGenerator
 from services.category_iii.video_redubber import VideoRedubber
 from services.category_iv.live_subtitle import LiveSubtitleEngine
 from services.progress_bar import progress_bp
-from history import add_history, get_history
+from history import add_history, get_history, search_history
 # Import sistemul optimizat de subtitrare
 # from backend.subtitles.sub import OptimizedSubtitleSystem
 
@@ -180,6 +180,18 @@ def history():
         return jsonify({'items': data}), 200
     except Exception as e:
         print(f"[HISTORY] ERROR: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/history/search', methods=['GET'])
+def history_search():
+    """Căutare full-text în istoric (FTS5 sau fallback LIKE)"""
+    try:
+        q = request.args.get('q', '').strip()
+        limit = int(request.args.get('limit', 30))
+        data = search_history(q, limit=limit)
+        return jsonify({'items': data}), 200
+    except Exception as e:
+        print(f"[HISTORY SEARCH] ERROR: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/validate-translation', methods=['POST'])
@@ -422,10 +434,18 @@ def translate_audio():
             'originalLanguage': src_lang.upper(),
             'translatedLanguage': 'RO',
             'downloadUrl': result.get('audio_file', ''),
+            'summaryUrl': result.get('summary_file', ''),
             'status': 'success',
             **result
         }
-        add_history('translate-audio', filename, response_payload.get('downloadUrl'), meta={'detected': result.get('detected_lang'), 'target_lang': 'ro'})
+        add_history(
+            'translate-audio',
+            filename,
+            response_payload.get('downloadUrl'),
+            meta={'detected': result.get('detected_lang'), 'target_lang': 'ro'},
+            summary_url=response_payload.get('summaryUrl') or result.get('summary_file'),
+            summary_text=result.get('summary_text') or ""
+        )
         return jsonify(response_payload), 200
         
     except Exception as e:
@@ -501,10 +521,18 @@ def subtitle_ro():
             'service': 'Subtitle Generation',
             'originalFile': filename,
             'downloadUrl': result.get('video_file', ''),
+            'summaryUrl': result.get('summary_file', ''),
             'status': 'success',
             **result
         }
-        add_history('subtitle-ro', filename, response_payload.get('downloadUrl'), meta={'attach': attach_mode, 'detail': detail_level})
+        add_history(
+            'subtitle-ro',
+            filename,
+            response_payload.get('downloadUrl'),
+            meta={'attach': attach_mode, 'detail': detail_level},
+            summary_url=response_payload.get('summaryUrl') or result.get('summary_file'),
+            summary_text=result.get('summary_text') or ""
+        )
         return jsonify(response_payload), 200
         
     except Exception as e:
@@ -547,10 +575,18 @@ def redub_video():
             'targetLanguage': dest_lang.upper(),
             'downloadUrl': result.get('video_file', ''),
             'subtitleUrl': result.get('subtitle_file', ''),
+            'summaryUrl': result.get('summary_file', ''),
             'status': 'success',
             **result
         }
-        add_history('redub-video', filename, response_payload.get('downloadUrl'), meta={'target_lang': dest_lang})
+        add_history(
+            'redub-video',
+            filename,
+            response_payload.get('downloadUrl'),
+            meta={'target_lang': dest_lang},
+            summary_url=response_payload.get('summaryUrl') or result.get('summary_file'),
+            summary_text=result.get('summary_text') or ""
+        )
         return jsonify(response_payload), 200
         
     except Exception as e:

@@ -4,7 +4,7 @@ import { uploadFile } from "../lib/api";
 
 const SubtitleROPage: React.FC = () => {
   const [queue, setQueue] = useState<File[]>([]);
-  const [attachMode, setAttachMode] = useState<string>('soft');
+  const [attachMode, setAttachMode] = useState<string>('hard');
   const [detailLevel, setDetailLevel] = useState<string>('medium');
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<any[]>([]);

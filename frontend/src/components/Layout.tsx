@@ -1,5 +1,5 @@
 import React from "react";
-import { FileText, Languages } from "lucide-react";
+import { FileText, Languages, Search } from "lucide-react";
 
 export const NavBar: React.FC<{ currentPage: string; onNavigate: (page: string) => void; backendStatus: string }> = ({ currentPage, onNavigate, backendStatus }) => (
   <nav className="liquidGlass-wrapper liquidGlass-header sticky top-0 left-0 right-0 z-50 rounded-3xl mx-4 mt-4 mb-2">
@@ -20,6 +20,14 @@ export const NavBar: React.FC<{ currentPage: string; onNavigate: (page: string) 
             <div className={`w-2.5 h-2.5 rounded-full shadow-lg ${backendStatus === "online" ? "bg-green-500 animate-pulse shadow-green-400" : backendStatus === "offline" ? "bg-red-500 shadow-red-400" : "bg-yellow-500 animate-pulse shadow-yellow-400"}`} />
             <span className="text-xs font-medium text-gray-700">Backend: {backendStatus === "online" ? "Online" : backendStatus === "offline" ? "Offline" : "Verificare..."}</span>
           </div>
+          <button
+            onClick={() => onNavigate("search")}
+            className="px-3 py-2 bg-white/80 border border-gray-200 rounded-xl shadow-sm hover:shadow group flex items-center gap-2"
+            title="Căutare istoric"
+          >
+            <Search className="w-4 h-4 text-gray-700 group-hover:text-blue-600" />
+            <span className="text-sm text-gray-700 group-hover:text-blue-600">Căutare</span>
+          </button>
           {currentPage !== "home" && (
             <button onClick={() => onNavigate("home")} className="px-5 py-2 bg-gradient-to-r from-blue-500 to-sky-500 hover:from-blue-600 hover:to-sky-600 text-white rounded-xl transition-all duration-300 shadow-md hover:shadow-lg font-medium">← Înapoi</button>
           )}

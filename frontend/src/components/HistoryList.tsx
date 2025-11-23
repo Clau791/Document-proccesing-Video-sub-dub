@@ -69,7 +69,7 @@ const HistoryList: React.FC = () => {
                   <span className="text-gray-400 text-xs">{new Date(item.created_at).toLocaleString()}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  {item.download_url ? (
+                  {item.download_url && (
                     <a
                       href={`${BASE_URL}${item.download_url}`}
                       className="px-3 py-1 text-xs rounded-lg bg-blue-500 text-white hover:bg-blue-600"
@@ -77,7 +77,17 @@ const HistoryList: React.FC = () => {
                     >
                       Descarcă
                     </a>
-                  ) : (
+                  )}
+                  {item.summary_url && (
+                    <a
+                      href={`${BASE_URL}${item.summary_url}`}
+                      className="px-3 py-1 text-xs rounded-lg bg-green-500 text-white hover:bg-green-600"
+                      download
+                    >
+                      Rezumat
+                    </a>
+                  )}
+                  {!item.download_url && !item.summary_url && (
                     <span className="text-xs text-gray-400">Fără fișier</span>
                   )}
                 </div>
