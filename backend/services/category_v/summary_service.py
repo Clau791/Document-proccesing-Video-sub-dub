@@ -5,9 +5,10 @@ Generează rezumate semantice în română pentru orice tip de conținut
 """
 
 import os
+import requests
 import json
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 class SummaryService:
     """Serviciu pentru generarea de rezumate semantice adaptate"""
@@ -19,9 +20,12 @@ class SummaryService:
         Args:
             api_key: API key pentru Google Gemini (opțional)
         """
-        self.api_key = "AIzaSyCrL0AA-rH5PYsGQ4F2OM1YjL8xtKn9K-I"
+        self.api_key = os.getenv("GEMINI_API_KEY") or "AIzaSyCrL0AA-rH5PYsGQ4F2OM1YjL8xtKn9K-I"
         self.output_dir = Path('processed')
         self.output_dir.mkdir(exist_ok=True)
+        self.ollama_host = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
+        self.ollama_model = os.getenv("OLLAMA_MODEL", "qwen2.5:32b")
+        self.chunk_size = int(os.getenv("SUMMARY_CHUNK_SIZE", "3500"))
         
     def summarize_content(
         self, 
@@ -69,61 +73,109 @@ class SummaryService:
                 'error': str(e)
             }
     
-    def _generate_summary_gemini(self, text: str, metadata: Dict[str, Any]) -> str:
-        """Generează rezumat folosind Gemini API"""
+    def _ollama_generate(self, prompt: str) -> str:
+        try:
+            resp = requests.post(
+                f"{self.ollama_host}/api/generate",
+                json={"model": self.ollama_model, "prompt": prompt, "stream": False},
+                timeout=60,
+            )
+            if resp.ok:
+                data = resp.json()
+                return (data.get("response") or data.get("output") or "").strip()
+        except Exception:
+            return ""
+        return ""
+
+    def _gemini_generate(self, prompt: str) -> str:
         try:
             import google.generativeai as genai
-            
             if not self.api_key:
-                return self._generate_simple_summary(text)
-            
+                return ""
             genai.configure(api_key=self.api_key)
             model = genai.GenerativeModel('gemini-2.0-flash-exp')
-            
-            # Prompt adaptat semantic
-            source_type = metadata.get('source_type', 'document')
-            domain = metadata.get('domain', '')
-            
-            prompt = f"""
-Analizează următorul conținut și generează un REZUMAT EXECUTIV în limba română.
+            response = model.generate_content(prompt)
+            return response.text.strip() if response and getattr(response, "text", "").strip() else ""
+        except Exception as e:
+            print(f"[SUMMARY] Gemini error: {e}")
+            return ""
+
+    def _llm_generate(self, prompt: str) -> str:
+        out = self._ollama_generate(prompt)
+        if out:
+            return out
+        return self._gemini_generate(prompt)
+
+    def _chunk_text(self, text: str, chunk_size: int = None) -> List[str]:
+        chunk_size = chunk_size or self.chunk_size
+        chunks = []
+        current = []
+        length = 0
+        for paragraph in text.split("\n"):
+            p = paragraph.strip()
+            if not p:
+                continue
+            if length + len(p) + 1 > chunk_size and current:
+                chunks.append("\n".join(current))
+                current = [p]
+                length = len(p)
+            else:
+                current.append(p)
+                length += len(p) + 1
+        if current:
+            chunks.append("\n".join(current))
+        return chunks or [text]
+
+    def _generate_summary_gemini(self, text: str, metadata: Dict[str, Any]) -> str:
+        """Generează rezumat cu Ollama -> Gemini, cu suport pentru texte lungi (chunking + multi-pass)."""
+        if not text:
+            return ""
+
+        source_type = metadata.get('source_type', 'document')
+        domain = metadata.get('domain', '')
+
+        def base_prompt(body: str) -> str:
+            return f"""
+Analizează conținutul și generează un REZUMAT EXECUTIV în limba română.
 
 CONȚINUT (tip: {source_type}{', domeniu: ' + domain if domain else ''}):
-{text[:4000]}
+{body}
 
 CERINȚE:
-1. REZUMAT EXECUTIV (2-3 paragrafe):
-   - Prezintă ideile principale și mesajul central
-   - Folosește limbaj clar și accesibil
-   - Evidențiază contribuțiile și concluziile cheie
+1. REZUMAT EXECUTIV (2-3 paragrafe)
+2. PUNCTE CHEIE (5-7 bullet-uri)
+3. CUVINTE CHEIE (5-10, listă)
 
-2. PUNCTE CHEIE (5-7 bullet points):
-   - Fiecare punct să fie concis și informativ
-   - Acoperă aspectele esențiale ale conținutului
-   - Păstrează structura logică a informației
-
-3. CUVINTE CHEIE (5-10):
-   - Termeni relevanți pentru indexare și căutare
-   - Specifici domeniului și temei
-
-Format: 
+Format:
 REZUMAT:
-[text rezumat]
+[text]
 
 PUNCTE CHEIE:
-• [punct 1]
-• [punct 2]
-...
+• ...
 
 CUVINTE CHEIE:
-[cuvânt1, cuvânt2, ...]
+[cuvânt1, ...]
 """
-            
-            response = model.generate_content(prompt)
-            return response.text.strip()
-            
-        except Exception as e:
-            print(f"[SUMMARY] Gemini error: {e}, using fallback")
+
+        chunks = self._chunk_text(text, 3500)
+
+        if len(chunks) == 1:
+            out = self._llm_generate(base_prompt(chunks[0]))
+            return out or self._generate_simple_summary(text)
+
+        partials = []
+        for idx, ch in enumerate(chunks, 1):
+            prompt = f"Rezuma segmentul #{idx} în română (max 6-8 propoziții), păstrând ideile cheie.\n\n{ch}"
+            part = self._llm_generate(prompt)
+            if part:
+                partials.append(part)
+
+        if not partials:
             return self._generate_simple_summary(text)
+
+        final_prompt = base_prompt("\n\n".join(partials))
+        final_summary = self._llm_generate(final_prompt)
+        return final_summary or "\n\n".join(partials) or self._generate_simple_summary(text)
     
     def _generate_simple_summary(self, text: str) -> str:
         """Fallback: rezumat simplu prin trunchiere"""

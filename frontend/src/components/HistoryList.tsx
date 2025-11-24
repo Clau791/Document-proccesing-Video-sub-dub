@@ -55,7 +55,12 @@ const HistoryList: React.FC = () => {
         <div className="flex items-center gap-2 mb-3">
           <Clock className="w-5 h-5 text-gray-700" />
           <h3 className="font-semibold text-gray-800">Istoric operațiuni</h3>
-          <button onClick={() => load(expanded ? 30 : 3)} className="ml-auto text-xs text-blue-600 hover:underline">Reîncarcă</button>
+          <button
+            onClick={() => load(expanded ? 30 : 3)}
+            className="ml-auto inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-gradient-to-r from-blue-500 to-sky-500 text-white shadow-sm hover:shadow-md transition-all"
+          >
+            ⟳ Reîncarcă
+          </button>
         </div>
         {loading && <p className="text-sm text-gray-500">Se încarcă...</p>}
         {error && <p className="text-sm text-red-500">{error}</p>}

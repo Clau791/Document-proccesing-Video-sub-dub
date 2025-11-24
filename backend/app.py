@@ -12,6 +12,7 @@ import os
 import sys
 import io
 import uuid
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -27,6 +28,7 @@ from services.category_iii.video_redubber import VideoRedubber
 from services.category_iv.live_subtitle import LiveSubtitleEngine
 from services.progress_bar import progress_bp
 from history import add_history, get_history, search_history
+import yt_dlp
 # Import sistemul optimizat de subtitrare
 # from backend.subtitles.sub import OptimizedSubtitleSystem
 
@@ -50,6 +52,8 @@ ALLOWED_EXTENSIONS = {
     'subtitle': {'mp4', 'avi', 'mov', 'mkv', 'webm'},
     'redub': {'mp4', 'avi', 'mov', 'mkv', 'webm'},
 }
+
+YOUTUBE_RUTUBE_REGEX = re.compile(r"(youtube\\.com/watch\\?v=|youtu\\.be/|rutube\\.ru/)", re.IGNORECASE)
 
 # ============================================
 # UTILITY FUNCTIONS
@@ -79,6 +83,29 @@ def validate_file(file, service_type):
         return False
     extension = file.filename.rsplit('.', 1)[1].lower()
     return extension in ALLOWED_EXTENSIONS.get(service_type, set())
+
+def validate_video_url(url: str) -> bool:
+    return bool(url and YOUTUBE_RUTUBE_REGEX.search(url))
+
+
+def download_video_from_url(url: str, target_dir: str, prefix: str = "yt") -> str:
+    """Descarcă video (YouTube/Rutube) cu yt_dlp, returnează calea fișierului mp4."""
+    target = Path(target_dir)
+    target.mkdir(parents=True, exist_ok=True)
+    out_tmpl = str(target / f"{prefix}_%(id)s.%(ext)s")
+    ydl_opts = {
+        'outtmpl': out_tmpl,
+        'format': 'mp4/bestvideo+bestaudio/best',
+        'merge_output_format': 'mp4',
+        'quiet': True,
+    }
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(url, download=True)
+        filepath = ydl.prepare_filename(info)
+        merged = Path(filepath).with_suffix(".mp4")
+        if merged.exists():
+            filepath = str(merged)
+        return filepath
 
 def generate_unique_filename(original_filename):
     """Generează nume unic pentru fișier"""
@@ -479,15 +506,69 @@ def translate_video():
             'originalFile': filename,
             'originalLanguage': src_lang.upper(),
             'translatedLanguage': 'RO',
-            'downloadUrl': result.get('video_file', ''),
+            'downloadUrl': result.get('download_url') or result.get('video_file', ''),
+            'transcript': result.get('transcript', ''),
+            'insight': result.get('insight', ''),
+            'summary': result.get('summary', ''),
             'status': 'success',
             **result
         }
-        add_history('translate-video', filename, response_payload.get('downloadUrl'), meta={'target_lang': 'ro'})
+        add_history(
+            'translate-video',
+            filename,
+            response_payload.get('downloadUrl'),
+            meta={'target_lang': 'ro'},
+            summary_url=response_payload.get('downloadUrl'),
+            summary_text=result.get('summary') or result.get('insight') or result.get('transcript', "")
+        )
         return jsonify(response_payload), 200
-        
+    
     except Exception as e:
         print(f"[TRANSLATE VIDEO] ERROR: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/translate-video-url', methods=['POST'])
+def translate_video_url():
+    """II.3: Traducere Video din link (YouTube/Rutube)"""
+    try:
+        data = request.get_json()
+        url = data.get('url')
+        if not url or not validate_video_url(url):
+            return jsonify({'error': 'Link invalid (acceptat: youtube sau rutube)'}), 400
+
+        filepath = download_video_from_url(url, UPLOAD_FOLDER, prefix="transvid")
+        filename = Path(filepath).name
+
+        print(f"\n[TRANSLATE VIDEO URL] AUTO → RO: {url}")
+
+        translator = VideoTranslator()
+        result = translator.translate(filepath, src_lang='auto', dest_lang='ro')
+
+        response_payload = {
+            'service': 'Video Translation',
+            'originalFile': filename,
+            'originalLanguage': result.get('detected_language', 'auto').upper() if 'detected_language' in result else 'AUTO',
+            'translatedLanguage': 'RO',
+            'downloadUrl': result.get('download_url') or result.get('video_file', ''),
+            'transcript': result.get('transcript', ''),
+            'insight': result.get('insight', ''),
+            'summary': result.get('summary', ''),
+            'status': 'success',
+            **result
+        }
+        add_history(
+            'translate-video',
+            filename,
+            response_payload.get('downloadUrl'),
+            meta={'target_lang': 'ro', 'url': url},
+            summary_url=response_payload.get('downloadUrl'),
+            summary_text=result.get('summary') or result.get('insight') or result.get('transcript', "")
+        )
+        return jsonify(response_payload), 200
+
+    except Exception as e:
+        print(f"[TRANSLATE VIDEO URL] ERROR: {e}")
         return jsonify({'error': str(e)}), 500
 
 # ============================================
@@ -593,6 +674,49 @@ def redub_video():
         print(f"[REDUB] ERROR: {e}")
         return jsonify({'error': str(e)}), 500
 
+
+@app.route('/api/redub-video-url', methods=['POST'])
+def redub_video_url():
+    """III.2: Redublare Video din link (YouTube/Rutube)"""
+    try:
+        data = request.get_json()
+        url = data.get('url')
+        dest_lang = data.get('dest_lang', 'ro').lower()
+        if not url or not validate_video_url(url):
+            return jsonify({'error': 'Link invalid (acceptat: youtube sau rutube)'}), 400
+
+        filepath = download_video_from_url(url, UPLOAD_FOLDER, prefix="redub")
+        filename = Path(filepath).name
+
+        print(f"\n[REDUB URL] AUTO → {dest_lang.upper()}: {url}")
+
+        redubber = VideoRedubber()
+        result = redubber.redub(filepath, dest_lang=dest_lang, speaker_wav=None)
+
+        response_payload = {
+            'service': 'Video Redub',
+            'originalFile': filename,
+            'originalLanguage': result.get('detected_language', 'auto').upper(),
+            'targetLanguage': dest_lang.upper(),
+            'downloadUrl': result.get('video_file', ''),
+            'subtitleUrl': result.get('subtitle_file', ''),
+            'summaryUrl': result.get('summary_file', ''),
+            'status': 'success',
+            **result
+        }
+        add_history(
+            'redub-video',
+            filename,
+            response_payload.get('downloadUrl'),
+            meta={'target_lang': dest_lang, 'url': url},
+            summary_url=response_payload.get('summaryUrl') or result.get('summary_file'),
+            summary_text=result.get('summary_text') or ""
+        )
+        return jsonify(response_payload), 200
+    except Exception as e:
+        print(f"[REDUB URL] ERROR: {e}")
+        return jsonify({'error': str(e)}), 500
+
 # ============================================
 # CATEGORIA IV: LIVE SUBTITLE
 # ============================================
@@ -679,7 +803,47 @@ def too_large(e):
 
 @app.errorhandler(500)
 def internal_error(e):
-    return jsonify({'error': 'Internal server error'}), 500
+        return jsonify({'error': 'Internal server error'}), 500
+
+
+@app.route('/api/subtitle-ro-url', methods=['POST'])
+def subtitle_ro_url():
+    """III.1: Subtitrare RO din link (YouTube/Rutube)"""
+    try:
+        data = request.get_json()
+        url = data.get('url')
+        attach_mode = data.get('attach', 'soft')
+        detail_level = data.get('detail_level', 'medium')
+        if not url or not validate_video_url(url):
+            return jsonify({'error': 'Link invalid (acceptat: youtube sau rutube)'}), 400
+
+        filepath = download_video_from_url(url, UPLOAD_FOLDER, prefix="subtitle")
+        filename = Path(filepath).name
+        print(f"\n[SUBTITLE URL] Mode: {attach_mode}, Detail: {detail_level}, URL: {url}")
+
+        generator = SubtitleGenerator()
+        result = generator.generate(filepath, lang='ro', attach_mode=attach_mode, detail_level=detail_level)
+
+        response_payload = {
+            'service': 'Subtitle Generation',
+            'originalFile': filename,
+            'downloadUrl': result.get('video_file', ''),
+            'summaryUrl': result.get('summary_file', ''),
+            'status': 'success',
+            **result
+        }
+        add_history(
+            'subtitle-ro',
+            filename,
+            response_payload.get('downloadUrl'),
+            meta={'attach': attach_mode, 'detail': detail_level, 'url': url},
+            summary_url=response_payload.get('summaryUrl') or result.get('summary_file'),
+            summary_text=result.get('summary_text') or ""
+        )
+        return jsonify(response_payload), 200
+    except Exception as e:
+        print(f"[SUBTITLE URL] ERROR: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.errorhandler(404)
 def not_found(e):

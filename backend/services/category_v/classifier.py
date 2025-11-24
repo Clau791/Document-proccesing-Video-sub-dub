@@ -5,6 +5,7 @@ Clasifică conținutul după domeniu, temă și nivel informațional
 """
 
 import os
+import requests
 import json
 from pathlib import Path
 from typing import Dict, Any, Optional, Tuple
@@ -86,7 +87,33 @@ class ContentClassifier:
         text: str, 
         metadata: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Clasificare inteligentă cu Gemini"""
+        """Clasificare inteligentă cu Ollama (qwen32b) -> fallback Gemini"""
+        # Ollama first
+        try:
+            host = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
+            model = os.getenv("OLLAMA_MODEL", "qwen2.5:32b")
+            prompt = f"""
+Analizează conținutul și întoarce DOAR un JSON cu câmpurile:
+{{"domain": "...", "topic": "...", "subtopic": "...", "info_level": "...", "confidence": 0.0-1.0}}
+text:
+{text[:3000]}
+"""
+            resp = requests.post(
+                f"{host}/api/generate",
+                json={"model": model, "prompt": prompt, "stream": False},
+                timeout=60,
+            )
+            if resp.ok:
+                data = resp.json()
+                cand = (data.get("response") or data.get("output") or "").strip()
+                if cand:
+                    parsed = self._parse_json_safe(cand)
+                    if parsed:
+                        return parsed
+        except Exception:
+            pass
+
+        # Gemini fallback
         try:
             import google.generativeai as genai
             

@@ -35,6 +35,7 @@ SpeechRecognition==3.10.4
 openai-whisper==20231117 ; python_version < "3.13"
 pysubs2==1.6.1
 TTS==0.22.0 ; python_version < "3.13"
+yt-dlp==2024.10.22 ; python_version < "3.14"
 
 # --- Traducere / utilitare text ---
 gTTS==2.5.3

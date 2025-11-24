@@ -57,7 +57,7 @@ const App: React.FC = () => {
         <GlobalKeyframes />
         <BackgroundFX />
         <NavBar currentPage={currentPage} onNavigate={setCurrentPage} backendStatus={backendStatus} />
-        <main className="flex-1">{renderPage()}</main>
+        <main className="flex-1 fade-up">{renderPage()}</main>
         <Footer />
       </div>
     </ErrorBoundary>

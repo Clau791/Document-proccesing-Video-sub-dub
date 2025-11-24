@@ -38,6 +38,7 @@ from pathlib import Path
 from typing import Optional, Dict, Any
 
 import google.generativeai as genai
+import requests
 from gtts import gTTS
 from dotenv import load_dotenv
 
@@ -75,7 +76,7 @@ class AudioTranslator:
     def __init__(
         self,
         processed_dir: str = "processed",
-        google_api_key: Optional[str] = None,
+        google_api_key: Optional[str] = "AIzaSyCrL0AA-rH5PYsGQ4F2OM1YjL8xtKn9K-I",
         gemini_model: Optional[str] = None,
     ) -> None:
         """
@@ -102,6 +103,53 @@ class AudioTranslator:
         genai.configure(api_key=self.api_key)
         self.model_id = gemini_model or os.getenv("GEMINI_MODEL", "gemini-2.0-flash-lite")
         self.model = genai.GenerativeModel(self.model_id)
+        self.ollama_host = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
+        self.ollama_model = os.getenv("OLLAMA_MODEL", "qwen2.5:32b")
+        self.chunk_size = int(os.getenv("SUMMARY_CHUNK_SIZE", "3500"))
+
+    def _ollama_generate(self, prompt: str) -> str:
+        """Folosește Ollama (qwen32b) pentru generare; întoarce text sau string gol."""
+        try:
+            resp = requests.post(
+                f"{self.ollama_host}/api/generate",
+                json={"model": self.ollama_model, "prompt": prompt, "stream": False},
+                timeout=60,
+            )
+            if resp.ok:
+                data = resp.json()
+                return (data.get("response") or data.get("output") or "").strip()
+        except Exception:
+            return ""
+        return ""
+
+    def _llm_generate(self, prompt: str) -> str:
+        out = self._ollama_generate(prompt)
+        if out:
+            return out
+        try:
+            resp = self.model.generate_content(prompt, generation_config={"temperature": 0.3})
+            return resp.text.strip() if hasattr(resp, "text") else ""
+        except Exception:
+            return ""
+
+    def _chunk_text(self, text: str) -> list[str]:
+        chunks = []
+        current = []
+        length = 0
+        for line in text.split("\n"):
+            ln = line.strip()
+            if not ln:
+                continue
+            if length + len(ln) + 1 > self.chunk_size and current:
+                chunks.append("\n".join(current))
+                current = [ln]
+                length = len(ln)
+            else:
+                current.append(ln)
+                length += len(ln) + 1
+        if current:
+            chunks.append("\n".join(current))
+        return chunks or [text]
 
     # ———————————— Detectare fișier ————————————
     def is_audio_file(self, filepath: str) -> bool:
@@ -149,21 +197,25 @@ class AudioTranslator:
 
     def translate_to_romanian(self, text: str) -> str:
         """
-        Traduce text în română folosind Gemini.
+        Traduce text în română: Ollama (qwen32b) ca primă opțiune, Gemini ca fallback.
         """
-        print("🌍 Traduc text în română (Gemini)…")
+        print("🌍 Traduc text în română (Ollama -> Gemini fallback)…")
         try:
-            system = (
+            prompt = (
                 "Ești un traducător profesionist. Tradu în română textul dat, "
-                "păstrând sensul, numele proprii și tonul. Returnează DOAR traducerea."
+                "păstrând sensul, numele proprii și tonul. Returnează DOAR traducerea.\n\n"
+                f"Text:\n{text}"
             )
-            resp = self.model.generate_content(
-                [system, text],
-                generation_config={"temperature": 0.2},
-            )
-            translated = resp.text.strip() if hasattr(resp, "text") else ""
+
+            translated = self._ollama_generate(prompt)
             if not translated:
-                raise RuntimeError("Traducere goală întoarsă de model.")
+                resp = self.model.generate_content(
+                    prompt,
+                    generation_config={"temperature": 0.2},
+                )
+                translated = resp.text.strip() if hasattr(resp, "text") else ""
+            if not translated:
+                raise RuntimeError("Traducere goală întoarsă de modele.")
             print(f"✓ Text tradus ({len(translated)} caractere)")
             return translated
         except Exception as e:
@@ -189,45 +241,57 @@ class AudioTranslator:
 
     def generate_summary(self, text: str) -> str:
         """
-        Generează un rezumat structurat în limba română (Gemini).
+        Generează un rezumat structurat în limba română (Ollama, apoi Gemini) cu suport pentru texte lungi (chunking + multi-pass).
         """
-        print("📝 Generez rezumat (Gemini)…")
+        print("📝 Generez rezumat (Ollama -> Gemini fallback)…")
         try:
-            system =(
-                        "Creează un rezumat concis și informativ în română, bine structurat. "
-                        "La începutul rezumatului, scoate în evidență tema generală și subtemele principale.\n\n"
-                        
-                        "TEMA PRINCIPALĂ:\n"
-                        "- 1 propoziție care descrie ideea centrală a materialului.\n\n"
-                        
-                        "SUBTEME:\n"
-                        "- 2–5 bullet-uri cu subtemele majore sau blocurile principale de idei.\n\n"
-                        
-                        "REZUMAT EXECUTIV:\n"
-                        "- 2–3 propoziții esențiale care sintetizează mesajul global.\n\n"
-                        
-                        "PUNCTE CHEIE:\n"
-                        "- 3–7 bullet-uri cu ideile principale. "
-                        "Când este relevant și ai această informație, poți menționa între paranteze "
-                        "momentul aproximativ din audio, de forma [mm:ss] (de ex. [02:15]). "
-                        "Dacă nu cunoști momentul exact, nu inventa valori și omite marcajul de timp.\n\n"
-                        
-                        "DETALII IMPORTANTE:\n"
-                        "- informații relevante suplimentare, exemple, cifre, nume proprii sau contexte specifice, dacă există.\n\n"
-                        
-                        "CONCLUZII:\n"
-                        "- 1–3 takeaway-uri finale, formulate clar, care subliniază relevanța și direcția generală.\n\n"
-                        
-                        "Returnează DOAR rezumatul în acest format, păstrând exact titlurile de secțiune."
-                    )
+            chunks = self._chunk_text(text)
 
-            resp = self.model.generate_content(
-                [system, f"Textul de rezumat este:\n\n{text}"],
-                generation_config={"temperature": 0.3},
-            )
-            summary = resp.text.strip() if hasattr(resp, "text") else ""
+            def build_prompt(body: str) -> str:
+                return (
+                    "Creează un rezumat concis și informativ în română, bine structurat. "
+                    "La începutul rezumatului, scoate în evidență tema generală și subtemele principale.\n\n"
+                    "TEMA PRINCIPALĂ:\n"
+                    "- 1 propoziție care descrie ideea centrală a materialului.\n\n"
+                    "SUBTEME:\n"
+                    "- 2–5 bullet-uri cu subtemele majore sau blocurile principale de idei.\n\n"
+                    "REZUMAT EXECUTIV:\n"
+                    "- 2–3 propoziții esențiale care sintetizează mesajul global.\n\n"
+                    "PUNCTE CHEIE:\n"
+                    "- 3–7 bullet-uri cu ideile principale. Dacă știi momentul din audio, notează [mm:ss]; altfel omite.\n\n"
+                    "DETALII IMPORTANTE:\n"
+                    "- informații relevante suplimentare, exemple, cifre, nume proprii sau contexte specifice, dacă există.\n\n"
+                    "CONCLUZII:\n"
+                    "- 1–3 takeaway-uri finale, formulate clar.\n\n"
+                    "Returnează DOAR rezumatul în acest format, păstrând exact titlurile de secțiune.\n\n"
+                    f"Text:\n{body}"
+                )
+
+            # Text scurt: un singur pas
+            if len(chunks) == 1:
+                prompt = build_prompt(chunks[0])
+                summary = self._llm_generate(prompt)
+                if not summary:
+                    raise RuntimeError("Rezumat gol întors de modele.")
+                print(f"✓ Rezumat generat ({len(summary)} caractere)")
+                return summary
+
+            # Multi-pass: rezumă segmentele, apoi rezumă rezumatele
+            partials = []
+            for idx, ch in enumerate(chunks, 1):
+                prompt_part = f"Rezuma segmentul #{idx} în română (max 6-8 propoziții), păstrând ideile cheie.\n\n{ch}"
+                part = self._llm_generate(prompt_part)
+                if part:
+                    partials.append(part)
+
+            if not partials:
+                raise RuntimeError("Nu am obținut rezumate parțiale.")
+
+            merge_prompt = build_prompt("\n\n".join(partials))
+            summary = self._llm_generate(merge_prompt)
             if not summary:
-                raise RuntimeError("Rezumat gol întors de model.")
+                # fallback: concatenăm parțialele
+                summary = "\n\n".join(partials)
             print(f"✓ Rezumat generat ({len(summary)} caractere)")
             return summary
         except Exception as e:

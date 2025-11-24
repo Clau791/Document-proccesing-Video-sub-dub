@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { Subtitles, Upload, Download } from "lucide-react";
-import { uploadFile } from "../lib/api";
+import { Subtitles, Upload, Download, Link as LinkIcon, ExternalLink } from "lucide-react";
+import { uploadFile, BASE_URL } from "../lib/api";
 
 const SubtitleROPage: React.FC = () => {
   const [queue, setQueue] = useState<File[]>([]);
+  const [urlQueue, setUrlQueue] = useState<string[]>([]);
   const [attachMode, setAttachMode] = useState<string>('hard');
   const [detailLevel, setDetailLevel] = useState<string>('medium');
   const [loading, setLoading] = useState(false);
@@ -16,9 +17,12 @@ const SubtitleROPage: React.FC = () => {
   const [showProgress, setShowProgress] = useState(false);
   const [summary, setSummary] = useState<string>("");
   const [displayedSummary, setDisplayedSummary] = useState<string>("");
+  const [showUrlInput, setShowUrlInput] = useState(false);
+  const [videoUrl, setVideoUrl] = useState("");
+  const [urlError, setUrlError] = useState<string | null>(null);
 
   useEffect(() => {
-    const es = new EventSource("http://127.0.0.1:5000/events");
+    const es = new EventSource(`${BASE_URL}/events`);
     es.onmessage = (evt) => {
       try {
         const data = JSON.parse(evt.data);
@@ -65,8 +69,31 @@ const SubtitleROPage: React.FC = () => {
     setQueue((prev) => prev.filter(f => f.name !== name));
   };
 
+  const isValidVideoUrl = (url: string) => {
+    const pattern = /(youtube\.com\/watch\?v=|youtu\.be\/|rutube\.ru\/)/i;
+    return pattern.test(url.trim());
+  };
+
+  const addUrlToQueue = () => {
+    if (!videoUrl.trim()) {
+      setUrlError("Introduce un link YouTube/Rutube");
+      return;
+    }
+    if (!isValidVideoUrl(videoUrl)) {
+      setUrlError("Link invalid (acceptat: youtube sau rutube)");
+      return;
+    }
+    setUrlQueue((prev) => [...prev, videoUrl.trim()]);
+    setVideoUrl("");
+    setUrlError(null);
+  };
+
+  const removeUrl = (url: string) => {
+    setUrlQueue((prev) => prev.filter(u => u !== url));
+  };
+
   const handleUploadQueue = async () => {
-    if (!queue.length) return;
+    if (!queue.length && !urlQueue.length) return;
     setLoading(true);
     setError(null);
     setPercent(0);
@@ -79,13 +106,32 @@ const SubtitleROPage: React.FC = () => {
 
     try {
       const newResults: any[] = [];
-      for (const f of queue) {
-        const data = await uploadFile('/subtitle-ro', f, { attach: attachMode, detail_level: detailLevel });
-        newResults.push({ file: f.name, ...data });
-        if (data.summary) setSummary(data.summary);
+      if (queue.length) {
+        for (const f of queue) {
+          const data = await uploadFile('/subtitle-ro', f, { attach: attachMode, detail_level: detailLevel });
+          newResults.push({ file: f.name, ...data });
+          if (data.summary) setSummary(data.summary);
+        }
+      }
+      if (urlQueue.length) {
+        for (const u of urlQueue) {
+          const res = await fetch(`${BASE_URL}/api/subtitle-ro-url`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url: u, attach: attachMode, detail_level: detailLevel })
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.error || 'Eroare la procesarea link-ului');
+          }
+          const data = await res.json();
+          newResults.push({ file: u, ...data });
+          if (data.summary) setSummary(data.summary);
+        }
       }
       setResults(newResults);
       setQueue([]);
+      setUrlQueue([]);
       setPercent(100);
       setEta(0);
       setStage("gata");
@@ -193,6 +239,51 @@ const SubtitleROPage: React.FC = () => {
                     </button>
                   </div>
 
+                  <div className="w-full">
+                    <div className="button-wrap w-full" style={{ '--btn-shadow': 'none' } as any}>
+                      <button
+                        type="button"
+                        className="glass-btn w-full bg-gradient-to-r from-orange-500 to-amber-500 text-white flex items-center justify-center gap-2"
+                        onClick={() => setShowUrlInput((v) => !v)}
+                      >
+                        <LinkIcon className="w-4 h-4" />
+                        <span className="truncate">Video YouTube / Rutube</span>
+                      </button>
+                    </div>
+                    {showUrlInput && (
+                      <div className="mt-3 p-3 rounded-xl border border-orange-200 bg-white/70 space-y-2">
+                        <input
+                          type="text"
+                          value={videoUrl}
+                          onChange={(e) => setVideoUrl(e.target.value)}
+                          placeholder="https://www.youtube.com/watch?v=..."
+                          className="w-full px-3 py-2 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-400"
+                        />
+                        {urlError && <p className="text-xs text-red-600">{urlError}</p>}
+                        <div className="flex flex-wrap gap-2">
+                          {isValidVideoUrl(videoUrl) && (
+                            <a
+                              href={videoUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-2 px-3 py-2 text-xs rounded-lg bg-orange-100 text-orange-700 border border-orange-200 hover:bg-orange-200"
+                            >
+                              <ExternalLink className="w-4 h-4" />
+                              Preview
+                            </a>
+                          )}
+                          <button
+                            type="button"
+                            onClick={addUrlToQueue}
+                            className="px-3 py-2 text-xs rounded-lg bg-orange-500 text-white hover:bg-orange-600"
+                          >
+                            Adaugă în coadă
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   <button
                     className="text-sm text-blue-600 hover:underline"
                     type="button"
@@ -223,6 +314,24 @@ const SubtitleROPage: React.FC = () => {
                         <span className="text-sm text-gray-800 truncate">{f.name}</span>
                         <button
                           onClick={() => removeFromQueue(f.name)}
+                          className="text-xs text-red-600 hover:underline"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {urlQueue.length > 0 && (
+                  <div className="mt-4 space-y-2 text-left">
+                    <p className="text-sm font-semibold text-gray-700">Coadă link-uri:</p>
+                    {urlQueue.map((u) => (
+                      <div key={u} className="flex items-center justify-between bg-orange-50 border border-orange-200 rounded-lg px-3 py-2">
+                        <a href={u} target="_blank" rel="noreferrer" className="text-sm text-orange-700 truncate flex-1 mr-2">
+                          {u}
+                        </a>
+                        <button
+                          onClick={() => removeUrl(u)}
                           className="text-xs text-red-600 hover:underline"
                         >
                           ✕

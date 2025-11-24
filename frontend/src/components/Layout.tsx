@@ -18,7 +18,7 @@ export const NavBar: React.FC<{ currentPage: string; onNavigate: (page: string) 
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-gray-50/90 to-gray-100/90 rounded-xl border border-gray-200 shadow-sm">
             <div className={`w-2.5 h-2.5 rounded-full shadow-lg ${backendStatus === "online" ? "bg-green-500 animate-pulse shadow-green-400" : backendStatus === "offline" ? "bg-red-500 shadow-red-400" : "bg-yellow-500 animate-pulse shadow-yellow-400"}`} />
-            <span className="text-xs font-medium text-gray-700">Backend: {backendStatus === "online" ? "Online" : backendStatus === "offline" ? "Offline" : "Verificare..."}</span>
+            <span className="text-xs font-medium text-gray-700">Server: {backendStatus === "online" ? "Online" : backendStatus === "offline" ? "Offline" : "Verificare..."}</span>
           </div>
           <button
             onClick={() => onNavigate("search")}
