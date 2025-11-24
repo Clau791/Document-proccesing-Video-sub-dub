@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Video, Upload, Link as LinkIcon, ExternalLink } from "lucide-react";
+import { Video, Upload, Link as LinkIcon, ExternalLink, Loader2 } from "lucide-react";
 import { uploadFile, BASE_URL } from "../lib/api";
 
 const RedubVideoPage: React.FC = () => {
@@ -12,6 +12,8 @@ const RedubVideoPage: React.FC = () => {
   const [showUrlInput, setShowUrlInput] = useState(false);
   const [videoUrl, setVideoUrl] = useState("");
   const [urlError, setUrlError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<number>(0);
+  const [stage, setStage] = useState<string>("");
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length) {
@@ -26,13 +28,26 @@ const RedubVideoPage: React.FC = () => {
     setLoading(true);
     setError(null);
     setResults([]);
+    setProgress(8);
+    setStage("Pregătire...");
 
     try {
+      const total = queue.length + urlQueue.length;
+      let done = 0;
+      const bump = () => {
+        done += 1;
+        const pct = Math.min(95, Math.round((done / Math.max(total, 1)) * 90) + 8);
+        setProgress(pct);
+      };
+
       for (const f of queue) {
+        setStage(`Încărcare fișier: ${f.name}`);
         const data = await uploadFile('/redub-video', f, { dest_lang: destLang });
         setResults((prev) => [...prev, { file: f.name, ...data }]);
+        bump();
       }
       for (const u of urlQueue) {
+        setStage(`Procesare link: ${u}`);
         const res = await fetch(`${BASE_URL}/api/redub-video-url`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -44,11 +59,15 @@ const RedubVideoPage: React.FC = () => {
         }
         const data = await res.json();
         setResults((prev) => [...prev, { file: u, ...data }]);
+        bump();
       }
       setQueue([]);
       setUrlQueue([]);
+      setStage("Finalizat");
+      setProgress(100);
     } catch (err: any) {
       setError(err.message);
+      setStage("Eroare");
     } finally {
       setLoading(false);
     }
@@ -78,7 +97,7 @@ const RedubVideoPage: React.FC = () => {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-4xl">
+    <div className="container mx-auto px-4 py-8 max-w-6xl">
       <div className="liquidGlass-wrapper liquidGlass-card rounded-3xl mb-6 shadow-lg fade-up" style={{padding: '1.5rem'}}>
         <div className="liquidGlass-effect" />
         <div className="liquidGlass-tint" />
@@ -97,12 +116,14 @@ const RedubVideoPage: React.FC = () => {
         </div>
       </div>
 
-      <div className="liquidGlass-wrapper liquidGlass-card rounded-3xl shadow-lg fade-up-delay-2" style={{padding: '2rem'}}>
-        <div className="liquidGlass-effect" />
-        <div className="liquidGlass-tint" />
-        <div className="liquidGlass-shine" />
-        <div className="liquidGlass-content">
-          <div className="border-2 border-dashed border-green-300 rounded-xl p-12 text-center">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="lg:col-span-7">
+          <div className="liquidGlass-wrapper liquidGlass-card rounded-3xl shadow-lg fade-up-delay-2 h-full" style={{padding: '2rem'}}>
+            <div className="liquidGlass-effect" />
+            <div className="liquidGlass-tint" />
+            <div className="liquidGlass-shine" />
+            <div className="liquidGlass-content h-full">
+              <div className="border-2 border-dashed border-green-300 rounded-xl p-12 text-center">
             <Upload className="w-16 h-16 mx-auto text-green-400 mb-4" />
             
             <div className="mb-6 flex gap-4 justify-center">
@@ -199,9 +220,10 @@ const RedubVideoPage: React.FC = () => {
                 <button
                   onClick={handleUploadQueue}
                   disabled={loading}
-                  className="px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-xl font-medium hover:shadow-lg transition-all disabled:opacity-50"
+                  className="w-full px-6 py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-emerald-500 via-teal-500 to-blue-500 shadow-lg hover:shadow-xl transition-all disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
-                  {loading ? 'Redublare în curs...' : `🎙️ Redublează (detectare automată) → ${destLang.toUpperCase()}`}
+                  {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <span>🎙️</span>}
+                  <span>{loading ? "Redublare în curs..." : `Redublează (auto) → ${destLang.toUpperCase()}`}</span>
                 </button>
               )}
             </div>
@@ -210,8 +232,8 @@ const RedubVideoPage: React.FC = () => {
               <div className="mt-4 space-y-2 text-left">
                 <p className="text-sm font-semibold text-gray-700">Coadă video:</p>
                 {queue.map((f) => (
-                  <div key={f.name} className="flex items-center justify-between bg-white/70 border border-gray-200 rounded-lg px-3 py-2">
-                    <span className="text-sm text-gray-800 truncate">{f.name}</span>
+                  <div key={f.name} className="flex items-center justify-between bg-white/70 border border-gray-200 rounded-lg px-3 py-2 gap-2 min-w-0">
+                    <span className="text-sm text-gray-800 truncate flex-1 min-w-0">{f.name}</span>
                     <button
                       onClick={() => setQueue((prev) => prev.filter(x => x.name !== f.name))}
                       className="text-xs text-red-600 hover:underline"
@@ -226,8 +248,8 @@ const RedubVideoPage: React.FC = () => {
               <div className="mt-4 space-y-2 text-left">
                 <p className="text-sm font-semibold text-gray-700">Coadă link-uri:</p>
                 {urlQueue.map((u) => (
-                  <div key={u} className="flex items-center justify-between bg-orange-50 border border-orange-200 rounded-lg px-3 py-2">
-                    <a href={u} target="_blank" rel="noreferrer" className="text-sm text-orange-700 truncate flex-1 mr-2">
+                  <div key={u} className="flex items-center justify-between bg-orange-50 border border-orange-200 rounded-lg px-3 py-2 gap-2 min-w-0">
+                    <a href={u} target="_blank" rel="noreferrer" className="text-sm text-orange-700 truncate flex-1 min-w-0">
                       {u}
                     </a>
                     <button
@@ -241,42 +263,108 @@ const RedubVideoPage: React.FC = () => {
               </div>
             )}
 
+            {(loading || progress > 0) && (
+              <div className="mt-5 p-4 rounded-xl bg-white/70 border border-emerald-100 space-y-2">
+                <div className="flex justify-between text-xs text-gray-600">
+                  <span>{stage || "Progres redublare"}</span>
+                  <span className="font-semibold text-emerald-700">{progress}%</span>
+                </div>
+                <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-emerald-400 via-teal-400 to-blue-400 transition-all"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
             {error && <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-600">{error}</div>}
             
             {results.length > 0 && (
-              <div className="mt-6 p-6 bg-green-50 border border-green-200 rounded-xl text-left">
-                <h3 className="font-bold text-green-800 mb-3">✅ Redublare completă!</h3>
-                <div className="space-y-3 text-sm text-gray-700">
-                  {results.map((res, idx) => (
-                    <div key={`${res.originalFile}-${idx}`} className="p-3 rounded-xl border border-green-100 bg-white/60">
-                      <p><strong>Fișier original:</strong> {res.originalFile}</p>
-                      <p><strong>Limba originală:</strong> {res.originalLanguage}</p>
-                      <p><strong>Limba țintă:</strong> {res.targetLanguage}</p>
+              <div className="mt-6 p-6 bg-green-50 border border-green-200 rounded-xl text-left space-y-3">
+                <h3 className="font-bold text-green-800 mb-2">✅ Redublare completă!</h3>
+                {results.map((res, idx) => (
+                  <div key={`${res.originalFile}-${idx}`} className="p-3 rounded-xl border border-green-100 bg-white/60 space-y-2 min-w-0">
+                    <p className="flex items-center gap-2 min-w-0">
+                      <strong className="whitespace-nowrap">Fișier original:</strong>
+                      <span className="truncate text-gray-800 flex-1 min-w-0" title={res.originalFile}>{res.originalFile}</span>
+                    </p>
+                    <p><strong>Limba originală:</strong> {res.originalLanguage}</p>
+                    <p><strong>Limba țintă:</strong> {res.targetLanguage}</p>
+                    <div className="flex flex-wrap gap-2">
                       {(res.video_file || res.downloadUrl) && (
-                        <a
-                          href={`${BASE_URL}${res.video_file || res.downloadUrl}`}
-                          className="mt-3 inline-block px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-                          download
-                        >
-                          📥 Descarcă Video Redublat
-                        </a>
-                      )}
-                      {res.subtitle_file && (
-                        <div className="mt-2">
+                        <div className="button-wrap button-wrap-green">
+                          <div className="button-shadow"></div>
                           <a
-                            href={`${BASE_URL}${res.subtitle_file}`}
-                            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+                            href={`${BASE_URL}${res.video_file || res.downloadUrl}`}
+                            className="glass-btn glass-btn-green inline-flex items-center gap-2 px-3 py-2"
                             download
                           >
-                            📄 Descarcă Subtitrare
+                            🎬
+                            <span>Video redublat</span>
+                          </a>
+                        </div>
+                      )}
+                      {res.subtitle_file && (
+                        <div className="button-wrap button-wrap-blue">
+                          <div className="button-shadow"></div>
+                          <a
+                            href={`${BASE_URL}${res.subtitle_file}`}
+                            className="glass-btn glass-btn-blue inline-flex items-center gap-2 px-3 py-2"
+                            download
+                          >
+                            📄
+                            <span>Subtitrare</span>
                           </a>
                         </div>
                       )}
                     </div>
-                  ))}
-                </div>
+                    {(res.summary || res.insight) && (
+                      <div className="p-3 rounded-lg bg-green-50 border border-green-100 text-sm text-gray-700">
+                        <p className="font-semibold text-green-700 mb-1">Insight:</p>
+                        <p className="leading-relaxed whitespace-pre-line">{res.summary || res.insight}</p>
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
+          </div>
+        </div>
+          </div>
+        </div>
+
+        <div className="lg:col-span-5">
+          <div className="liquidGlass-wrapper liquidGlass-card rounded-3xl shadow-lg fade-up-delay-3 h-full" style={{padding: '1.25rem'}}>
+            <div className="liquidGlass-effect" />
+            <div className="liquidGlass-tint" />
+            <div className="liquidGlass-shine" />
+            <div className="liquidGlass-content h-full flex flex-col">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-emerald-500 font-semibold">Insight redublare</p>
+                  <h3 className="text-lg font-bold text-gray-800 leading-tight">Transcript + Observații</h3>
+                </div>
+                <span className="text-xs px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">
+                  text only
+                </span>
+              </div>
+              <div className="p-3 rounded-2xl bg-white/60 border border-emerald-100 shadow-inner min-h-[260px]">
+                {results.length > 0 ? (
+                  <div className="space-y-2 text-sm text-gray-700">
+                    {results.map((res, idx) => (
+                      <div key={`ins-${idx}`} className="p-2 rounded-xl bg-emerald-50 border border-emerald-100">
+                        <p className="text-xs text-gray-500 truncate" title={res.originalFile}>{res.originalFile}</p>
+                        <p className="font-semibold text-emerald-700 mb-1">Insight</p>
+                        <p className="leading-relaxed whitespace-pre-line">{res.summary || res.insight || "Nu a fost generat insight."}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-400 italic">Insight-urile procesărilor vor apărea aici după ce încarci un video.</p>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </div>

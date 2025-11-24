@@ -117,3 +117,4 @@ const WordPDFAnalysisPage: React.FC = () => {
 };
 
 export default WordPDFAnalysisPage;
+export { WordPDFAnalysisPage };

@@ -86,9 +86,9 @@ const SearchPage: React.FC = () => {
 
       <div className="mt-6 space-y-3">
         {results.map((item) => (
-          <div key={item.id} className="p-4 rounded-2xl border border-gray-200 bg-white/80 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-            <div className="text-sm text-gray-800 space-y-1">
-              <div className="flex items-center gap-2">
+          <div key={item.id} className="p-4 rounded-2xl border border-gray-200 bg-white/80 flex flex-col md:flex-row md:items-center md:justify-between gap-3 min-w-0">
+            <div className="text-sm text-gray-800 space-y-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-xs px-2 py-1 rounded-lg bg-gray-100 text-gray-700 font-semibold">
                   {serviceLabel[item.service] || item.service}
                 </span>
@@ -96,21 +96,21 @@ const SearchPage: React.FC = () => {
                   {item.status}
                 </span>
               </div>
-              <p className="font-semibold truncate">Fișier: {item.original_file}</p>
+              <p className="font-semibold truncate" title={item.original_file}>Fișier: {item.original_file}</p>
               <p className="text-gray-500 text-xs">Creat: {new Date(item.created_at).toLocaleString()}</p>
               {item.meta && Object.keys(item.meta).length > 0 && (
                 <p className="text-gray-600 text-xs truncate">Meta: {Object.entries(item.meta).map(([k,v]) => `${k}:${v}`).join(" · ")}</p>
               )}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               {item.download_url ? (
                 <a
                   href={`${BASE_URL}${item.download_url}`}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm max-w-full"
                   download
                 >
                   <Download className="w-4 h-4" />
-                  Descarcă
+                  <span className="truncate max-w-[160px]" title="Descarcă">Descarcă</span>
                 </a>
               ) : (
                 <span className="text-xs text-gray-400">Fără fișier</span>
@@ -118,11 +118,11 @@ const SearchPage: React.FC = () => {
               {item.summary_url && (
                 <a
                   href={`${BASE_URL}${item.summary_url}`}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 text-sm"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 text-sm max-w-full"
                   download
                 >
                   <Download className="w-4 h-4" />
-                  Rezumat
+                  <span className="truncate max-w-[160px]" title="Rezumat">Rezumat</span>
                 </a>
               )}
             </div>
