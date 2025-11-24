@@ -22,6 +22,7 @@ const SubtitleROPage: React.FC = () => {
   const [showUrlInput, setShowUrlInput] = useState(false);
   const [videoUrl, setVideoUrl] = useState("");
   const [urlError, setUrlError] = useState<string | null>(null);
+  const [translatorMode, setTranslatorMode] = useState<"cloud" | "local">("cloud");
 
   useEffect(() => {
     const es = new EventSource(`${BASE_URL}/events`);
@@ -110,7 +111,7 @@ const SubtitleROPage: React.FC = () => {
       const newResults: any[] = [];
       if (queue.length) {
         for (const f of queue) {
-          const data = await uploadFile('/subtitle-ro', f, { attach: attachMode, detail_level: detailLevel });
+          const data = await uploadFile('/subtitle-ro', f, { attach: attachMode, detail_level: detailLevel, translator_mode: translatorMode });
           newResults.push({ file: f.name, ...data });
           if (data.summary) setSummary(data.summary);
         }
@@ -120,7 +121,7 @@ const SubtitleROPage: React.FC = () => {
           const res = await fetch(`${BASE_URL}/api/subtitle-ro-url`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ url: u, attach: attachMode, detail_level: detailLevel })
+            body: JSON.stringify({ url: u, attach: attachMode, detail_level: detailLevel, translator_mode: translatorMode })
           });
           if (!res.ok) {
             const err = await res.json().catch(() => ({}));
@@ -214,6 +215,17 @@ const SubtitleROPage: React.FC = () => {
                       <option value="brief">Succint</option>
                       <option value="medium">Standard</option>
                       <option value="deep">Detaliat</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block mb-2 font-semibold text-gray-700">Traducere:</label>
+                    <select
+                      value={translatorMode}
+                      onChange={(e) => setTranslatorMode(e.target.value as "cloud" | "local")}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                    >
+                      <option value="cloud">Cloud (GoogleTranslator)</option>
+                      <option value="local">Local AI (Ollama qwen2.5:32b)</option>
                     </select>
                   </div>
                 </div>

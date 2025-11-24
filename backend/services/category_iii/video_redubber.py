@@ -149,6 +149,8 @@ class VideoRedubber:
         self.processed_dir = Path(processed_dir)
         self.processed_dir.mkdir(parents=True, exist_ok=True)
         self.tts_model = tts_model
+        self._ollama_host = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
+        self._ollama_model = os.getenv("OLLAMA_MODEL", "qwen2.5:32b")
 
         # Lazy init pentru Whisper și TTS (consumă memorie)
         self._whisper_model = None
@@ -165,7 +167,26 @@ class VideoRedubber:
             self._tts_engine = LocalTTSEngine(model_name=self.tts_model, use_gpu=torch.cuda.is_available(), speaker_wav=speaker_wav)
         return self._tts_engine
 
-    def redub(self, video_path: str, dest_lang: str = "ro", speaker_wav: Optional[str] = None) -> Dict[str, Any]:
+    def _translate_local(self, text: str, target_lang: str) -> str:
+        try:
+            import requests
+            prompt = (
+                f"Tradu în limba {target_lang} textul următor, păstrând sensul, timpii și numele proprii. "
+                f"Returnează DOAR traducerea:\n\n{text}"
+            )
+            resp = requests.post(
+                f"{self._ollama_host}/v1/completions",
+                json={"model": self._ollama_model, "prompt": prompt},
+                timeout=60,
+            )
+            if resp.ok:
+                data = resp.json()
+                return (data.get("choices") or [{}])[0].get("text", "").strip()
+        except Exception as e:
+            print(f"[REDUB] Ollama translate fallback: {e}")
+        return ""
+
+    def redub(self, video_path: str, dest_lang: str = "ro", speaker_wav: Optional[str] = None, translator_mode: str = "cloud") -> Dict[str, Any]:
         """
         Redublează video în limba dest_lang cu detectare automată a limbii sursă.
         """
@@ -195,9 +216,13 @@ class VideoRedubber:
             raise RuntimeError("Nu s-au găsit segmente în transcriere.")
 
         # 3) Traduce segmente
-        translator = GoogleTranslator(source="auto", target=dest_lang)
+        translator = GoogleTranslator(source="auto", target=dest_lang) if translator_mode == "cloud" else None
         for seg in segments:
-            seg["translated_text"] = translator.translate(seg["text"])
+            if translator_mode == "cloud" and translator:
+                seg["translated_text"] = translator.translate(seg["text"])
+            else:
+                seg["translated_text"] = self._translate_local(seg["text"], dest_lang) or seg["text"]
+        print(f"[REDUB] Traducere mod={translator_mode}, segmente: {len(segments)}")
         print("[REDUB] Traducere segmente completă.")
 
         # 4) TTS pe fiecare segment cu ajustare durată
@@ -250,10 +275,10 @@ class VideoRedubber:
             "subtitle_file": f"/download/{srt_path.name}",
             "detected_language": detected_lang,
             "note": (
-                    "Redublare efectuată cu Whisper + traducere GoogleTranslator + TTS local. "
-                    "Poți schimba modelul TTS în LocalTTSEngine."
-                )
-            }
+                "Redublare efectuată cu Whisper + traducere GoogleTranslator + TTS local. "
+                "Poți schimba modelul TTS în LocalTTSEngine."
+            )
+        }
 
     @staticmethod
     def _fmt_srt_time(t: float) -> str:

@@ -7,7 +7,8 @@ const RedubVideoPage: React.FC = () => {
 
   const [queue, setQueue] = useState<File[]>([]);
   const [urlQueue, setUrlQueue] = useState<string[]>([]);
-  const [destLang, setDestLang] = useState<string>('en');
+  const [destLang] = useState<string>('ro');
+  const [detailLevel, setDetailLevel] = useState<string>('medium');
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -16,6 +17,7 @@ const RedubVideoPage: React.FC = () => {
   const [urlError, setUrlError] = useState<string | null>(null);
   const [progress, setProgress] = useState<number>(0);
   const [stage, setStage] = useState<string>("");
+  const [translatorMode, setTranslatorMode] = useState<"cloud" | "local">("cloud");
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length) {
@@ -44,7 +46,7 @@ const RedubVideoPage: React.FC = () => {
 
       for (const f of queue) {
         setStage(`Încărcare fișier: ${f.name}`);
-        const data = await uploadFile('/redub-video', f, { dest_lang: destLang });
+        const data = await uploadFile('/redub-video', f, { dest_lang: destLang, translator_mode: translatorMode, detail_level: detailLevel });
         setResults((prev) => [...prev, { file: f.name, ...data }]);
         bump();
       }
@@ -53,7 +55,7 @@ const RedubVideoPage: React.FC = () => {
         const res = await fetch(`${BASE_URL}/api/redub-video-url`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url: u, dest_lang: destLang })
+          body: JSON.stringify({ url: u, dest_lang: destLang, translator_mode: translatorMode, detail_level: detailLevel })
         });
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
@@ -128,17 +130,35 @@ const RedubVideoPage: React.FC = () => {
               <div className="border-2 border-dashed border-green-300 rounded-xl p-12 text-center">
             <Upload className="w-16 h-16 mx-auto text-green-400 mb-4" />
             
-            <div className="mb-6 flex gap-4 justify-center">
+            <div className="mb-6 flex flex-col gap-4">
               <div>
-                <label className="block mb-2 font-semibold text-gray-700">În limba:</label>
-                <select
-                  value={destLang}
-                  onChange={(e) => setDestLang(e.target.value)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
-                >
-                  <option value="en">🇬🇧 Engleză</option>
-                  <option value="ro">🇷🇴 Română</option>
-                </select>
+                <p className="font-semibold text-gray-700">Limba țintă: <span className="text-emerald-700">Română (fix)</span></p>
+                <p className="text-xs text-gray-500">Redublarea se face mereu în limba română.</p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block mb-2 font-semibold text-gray-700">Traducere:</label>
+                  <select
+                    value={translatorMode}
+                    onChange={(e) => setTranslatorMode(e.target.value as "cloud" | "local")}
+                    className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 w-full"
+                  >
+                    <option value="cloud">Cloud (GoogleTranslator)</option>
+                    <option value="local">Local AI (Ollama qwen2.5:32b)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block mb-2 font-semibold text-gray-700">Nivel detaliu rezumat:</label>
+                  <select
+                    value={detailLevel}
+                    onChange={(e) => setDetailLevel(e.target.value)}
+                    className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 w-full"
+                  >
+                    <option value="brief">Succint</option>
+                    <option value="medium">Standard</option>
+                    <option value="deep">Detaliat</option>
+                  </select>
+                </div>
               </div>
             </div>
 

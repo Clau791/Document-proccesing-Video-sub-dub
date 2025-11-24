@@ -585,6 +585,7 @@ def subtitle_ro():
         file = request.files['file']
         attach_mode = request.form.get('attach', 'soft')
         detail_level = request.form.get('detail_level', 'medium')
+        translator_mode = request.form.get('translator_mode', 'cloud')
         
         if not validate_file(file, 'subtitle'):
             return jsonify({'error': 'Invalid file type'}), 400
@@ -596,7 +597,7 @@ def subtitle_ro():
         print(f"\n[SUBTITLE] Mode: {attach_mode}, Detail: {detail_level}, File: {filename}")
         
         generator = SubtitleGenerator()
-        result = generator.generate(filepath, lang='ro', attach_mode=attach_mode, detail_level=detail_level)
+        result = generator.generate(filepath, lang='ro', attach_mode=attach_mode, detail_level=detail_level, translator_mode=translator_mode)
         
         response_payload = {
             'service': 'Subtitle Generation',
@@ -610,7 +611,7 @@ def subtitle_ro():
             'subtitle-ro',
             filename,
             response_payload.get('downloadUrl'),
-            meta={'attach': attach_mode, 'detail': detail_level},
+            meta={'attach': attach_mode, 'detail': detail_level, 'translator_mode': translator_mode},
             summary_url=response_payload.get('summaryUrl') or result.get('summary_file'),
             summary_text=result.get('summary_text') or ""
         )
@@ -630,6 +631,8 @@ def redub_video():
         file = request.files['file']
         voice_sample = request.files.get('voice_sample')  # opțional pentru voice cloning
         dest_lang = request.form.get('dest_lang', 'ro').lower()
+        translator_mode = request.form.get('translator_mode', 'cloud').lower()
+        detail_level = request.form.get('detail_level', 'medium')
         
         if not validate_file(file, 'redub'):
             return jsonify({'error': 'Invalid file type'}), 400
@@ -647,7 +650,7 @@ def redub_video():
         print(f"\n[REDUB] AUTO → {dest_lang.upper()}: {filename}")
         
         redubber = VideoRedubber()
-        result = redubber.redub(filepath, dest_lang=dest_lang, speaker_wav=speaker_wav_path)
+        result = redubber.redub(filepath, dest_lang=dest_lang, speaker_wav=speaker_wav_path, translator_mode=translator_mode)
         
         response_payload = {
             'service': 'Video Redub',
@@ -657,6 +660,7 @@ def redub_video():
             'downloadUrl': result.get('video_file', ''),
             'subtitleUrl': result.get('subtitle_file', ''),
             'summaryUrl': result.get('summary_file', ''),
+            'detailLevel': detail_level,
             'status': 'success',
             **result
         }
@@ -664,7 +668,7 @@ def redub_video():
             'redub-video',
             filename,
             response_payload.get('downloadUrl'),
-            meta={'target_lang': dest_lang},
+            meta={'target_lang': dest_lang, 'translator_mode': translator_mode, 'detail_level': detail_level},
             summary_url=response_payload.get('summaryUrl') or result.get('summary_file'),
             summary_text=result.get('summary_text') or ""
         )
@@ -682,6 +686,8 @@ def redub_video_url():
         data = request.get_json()
         url = data.get('url')
         dest_lang = data.get('dest_lang', 'ro').lower()
+        translator_mode = data.get('translator_mode', 'cloud').lower()
+        detail_level = data.get('detail_level', 'medium')
         if not url or not validate_video_url(url):
             return jsonify({'error': 'Link invalid (acceptat: youtube sau rutube)'}), 400
 
@@ -691,7 +697,7 @@ def redub_video_url():
         print(f"\n[REDUB URL] AUTO → {dest_lang.upper()}: {url}")
 
         redubber = VideoRedubber()
-        result = redubber.redub(filepath, dest_lang=dest_lang, speaker_wav=None)
+        result = redubber.redub(filepath, dest_lang=dest_lang, speaker_wav=None, translator_mode=translator_mode)
 
         response_payload = {
             'service': 'Video Redub',
@@ -701,6 +707,7 @@ def redub_video_url():
             'downloadUrl': result.get('video_file', ''),
             'subtitleUrl': result.get('subtitle_file', ''),
             'summaryUrl': result.get('summary_file', ''),
+            'detailLevel': detail_level,
             'status': 'success',
             **result
         }
@@ -708,7 +715,7 @@ def redub_video_url():
             'redub-video',
             filename,
             response_payload.get('downloadUrl'),
-            meta={'target_lang': dest_lang, 'url': url},
+            meta={'target_lang': dest_lang, 'url': url, 'translator_mode': translator_mode, 'detail_level': detail_level},
             summary_url=response_payload.get('summaryUrl') or result.get('summary_file'),
             summary_text=result.get('summary_text') or ""
         )
@@ -814,6 +821,7 @@ def subtitle_ro_url():
         url = data.get('url')
         attach_mode = data.get('attach', 'soft')
         detail_level = data.get('detail_level', 'medium')
+        translator_mode = data.get('translator_mode', 'cloud')
         if not url or not validate_video_url(url):
             return jsonify({'error': 'Link invalid (acceptat: youtube sau rutube)'}), 400
 
@@ -822,7 +830,7 @@ def subtitle_ro_url():
         print(f"\n[SUBTITLE URL] Mode: {attach_mode}, Detail: {detail_level}, URL: {url}")
 
         generator = SubtitleGenerator()
-        result = generator.generate(filepath, lang='ro', attach_mode=attach_mode, detail_level=detail_level)
+        result = generator.generate(filepath, lang='ro', attach_mode=attach_mode, detail_level=detail_level, translator_mode=translator_mode)
 
         response_payload = {
             'service': 'Subtitle Generation',
@@ -836,7 +844,7 @@ def subtitle_ro_url():
             'subtitle-ro',
             filename,
             response_payload.get('downloadUrl'),
-            meta={'attach': attach_mode, 'detail': detail_level, 'url': url},
+            meta={'attach': attach_mode, 'detail': detail_level, 'url': url, 'translator_mode': translator_mode},
             summary_url=response_payload.get('summaryUrl') or result.get('summary_file'),
             summary_text=result.get('summary_text') or ""
         )

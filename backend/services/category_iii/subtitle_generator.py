@@ -38,6 +38,8 @@ class SubtitleGenerator:
         self._global_start = None
         self._total_expected = None
         self._summary_service = SummaryService()
+        self._ollama_host = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
+        self._ollama_model = os.getenv("OLLAMA_MODEL", "qwen2.5:32b")
 
     # ------------ Internals ------------
     def _load_model(self):
@@ -53,12 +55,31 @@ class SubtitleGenerator:
         language = result.get("language", "auto")
         return segments, language
 
-    def _translate_segments(self, segments: List[dict], target_lang: str) -> Tuple[List[str], List[str]]:
+    def _translate_ollama(self, text: str, target_lang: str) -> str:
+        try:
+            import requests
+            prompt = (
+                f"Tradu în limba {target_lang} textul următor, păstrând sensul și numele proprii. "
+                f"Returnează DOAR traducerea:\n\n{text}"
+            )
+            resp = requests.post(
+                f"{self._ollama_host}/v1/completions",
+                json={"model": self._ollama_model, "prompt": prompt},
+                timeout=60,
+            )
+            if resp.ok:
+                data = resp.json()
+                return (data.get("choices") or [{}])[0].get("text", "").strip()
+        except Exception as e:
+            logging.warning("[SUBTITLE] Ollama translate fallback: %s", e)
+        return ""
+
+    def _translate_segments(self, segments: List[dict], target_lang: str, mode: str = "cloud") -> Tuple[List[str], List[str]]:
         """
         Returnează (texte_traduse, texte_originale).
         În caz de eroare de traducere, întoarce textul original pentru acel segment.
         """
-        translator = GoogleTranslator(source="auto", target=target_lang)
+        translator = GoogleTranslator(source="auto", target=target_lang) if mode == "cloud" else None
         translated, originals = [], []
         for seg in segments:
             orig = (seg.get("text") or "").strip()
@@ -67,7 +88,11 @@ class SubtitleGenerator:
                 translated.append("")
                 continue
             try:
-                translated.append(translator.translate(orig))
+                if mode == "cloud" and translator:
+                    translated.append(translator.translate(orig))
+                else:
+                    local = self._translate_ollama(orig, target_lang)
+                    translated.append(local or orig)
             except Exception as e:  # pragma: no cover - doar log, nu vrem să spargem fluxul
                 logging.warning("Traducere eșuată pentru segment: %s", e)
                 translated.append(orig)
@@ -172,7 +197,7 @@ class SubtitleGenerator:
         return result
 
     # ------------ API publică ------------
-    def generate(self, filepath: str, lang: str = "ro", attach_mode: str = "soft", detail_level: str = "medium"):
+    def generate(self, filepath: str, lang: str = "ro", attach_mode: str = "soft", detail_level: str = "medium", translator_mode: str = "cloud"):
         """
         Generează subtitrare în română pentru videoclipul dat.
 
@@ -184,7 +209,8 @@ class SubtitleGenerator:
         """
         video_path = Path(filepath)
         attach_mode = (attach_mode or "soft").lower()
-        print(f"[SUBTITLE] attach_mode={attach_mode}, detail_level={detail_level}")
+        translator_mode = (translator_mode or "cloud").lower()
+        print(f"[SUBTITLE] attach_mode={attach_mode}, detail_level={detail_level}, translator_mode={translator_mode}")
         self._global_start = time.time()
 
         duration = self._probe_duration(video_path)
@@ -216,7 +242,7 @@ class SubtitleGenerator:
             expected_seconds=timeline["translate"],
             base_percent=pct_transcribe,
             weight_percent=pct_translate,
-            func=lambda: self._translate_segments(segments, target_lang=lang),
+            func=lambda: self._translate_segments(segments, target_lang=lang, mode=translator_mode),
         )
         print(f"[SUBTITLE] Traducere completă ({len(translated_texts)} segmente)")
 
