@@ -176,10 +176,12 @@ class VideoRedubber:
         job_id = video_path.stem
         work_dir = self.processed_dir / job_id
         work_dir.mkdir(parents=True, exist_ok=True)
+        print(f"[REDUB] Start {video_path.name} -> {dest_lang.upper()}")
 
         # 1) Extrage audio
         raw_audio = work_dir / f"{job_id}_raw.wav"
         extract_audio(video_path, raw_audio)
+        print(f"[REDUB] Audio extras: {raw_audio.name}")
 
         # 2) Transcriere + detectare limbă
         model = self._get_whisper()
@@ -187,6 +189,7 @@ class VideoRedubber:
         transcribed = model.transcribe(str(raw_audio), task="transcribe")
         segments = transcribed.get("segments", [])
         detected_lang = transcribed.get("language", "auto")
+        print(f"[REDUB] Transcriere gata. Segmente: {len(segments)}, limbă detectată: {detected_lang}")
 
         if not segments:
             raise RuntimeError("Nu s-au găsit segmente în transcriere.")
@@ -195,6 +198,7 @@ class VideoRedubber:
         translator = GoogleTranslator(source="auto", target=dest_lang)
         for seg in segments:
             seg["translated_text"] = translator.translate(seg["text"])
+        print("[REDUB] Traducere segmente completă.")
 
         # 4) TTS pe fiecare segment cu ajustare durată
         tts = self._get_tts(speaker_wav=speaker_wav)
@@ -218,14 +222,17 @@ class VideoRedubber:
 
         if not tts_segments:
             raise RuntimeError("Nu s-au generat segmente TTS.")
+        print(f"[REDUB] TTS generat pentru {len(tts_segments)} segmente.")
 
         total_ms = max(seg["end"] for seg in segments) * 1000 + 500
         dubbed_wav = work_dir / f"{job_id}_dubbed.wav"
         assemble_timeline(tts_segments, total_ms, dubbed_wav)
+        print(f"[REDUB] Timeline audio asamblat: {dubbed_wav.name}")
 
         # 5) Mux audio în video
         out_video = self.processed_dir / f"{job_id}_{dest_lang}.mp4"
         mux_audio_to_video(video_path, dubbed_wav, out_video)
+        print(f"[REDUB] Mux final: {out_video.name}")
 
         # 6) SRT tradus
         srt_path = self.processed_dir / f"{job_id}_{dest_lang}.srt"
@@ -243,10 +250,10 @@ class VideoRedubber:
             "subtitle_file": f"/download/{srt_path.name}",
             "detected_language": detected_lang,
             "note": (
-                "Redublare efectuată cu Whisper + traducere GoogleTranslator + TTS local. "
-                "Poți schimba modelul TTS în LocalTTSEngine."
-            )
-        }
+                    "Redublare efectuată cu Whisper + traducere GoogleTranslator + TTS local. "
+                    "Poți schimba modelul TTS în LocalTTSEngine."
+                )
+            }
 
     @staticmethod
     def _fmt_srt_time(t: float) -> str:

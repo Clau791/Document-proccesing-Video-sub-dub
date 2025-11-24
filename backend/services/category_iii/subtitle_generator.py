@@ -200,6 +200,7 @@ class SubtitleGenerator:
 
         send_task_progress(percent=1.0, eta_seconds=timeline["total"], stage="init", detail="pregătire")
 
+        print(f"[SUBTITLE] Transcriere start: {video_path.name}")
         segments, detected_lang = self._run_stage(
             "transcriere",
             expected_seconds=timeline["transcribe"],
@@ -207,7 +208,9 @@ class SubtitleGenerator:
             weight_percent=pct_transcribe,
             func=lambda: self._transcribe(str(video_path)),
         )
+        print(f"[SUBTITLE] Transcriere completă ({len(segments)} segmente), limbă detectată: {detected_lang}")
 
+        print("[SUBTITLE] Traducere segmente...")
         translated_texts, originals = self._run_stage(
             "traducere",
             expected_seconds=timeline["translate"],
@@ -215,6 +218,7 @@ class SubtitleGenerator:
             weight_percent=pct_translate,
             func=lambda: self._translate_segments(segments, target_lang=lang),
         )
+        print(f"[SUBTITLE] Traducere completă ({len(translated_texts)} segmente)")
 
         srt_path = self.processed_dir / f"{video_path.stem}_{lang}.srt"
         self._write_srt(segments, translated_texts, srt_path)
@@ -227,6 +231,7 @@ class SubtitleGenerator:
 
         # Rezumat video (folosește textul tradus concatenat)
         full_text = "\n".join(translated_texts)
+        print("[SUBTITLE] Rezumat video...")
         summary_result = self._run_stage(
             "rezumat",
             expected_seconds=timeline.get("summary", max(8.0, duration * 0.1)),
@@ -269,4 +274,5 @@ class SubtitleGenerator:
             response["video_file"] = f"/download/{srt_path.name}"
 
         send_task_progress(percent=100.0, eta_seconds=0.0, stage="gata", detail="complet")
+        print(f"[SUBTITLE] Finalizat. SRT: {srt_path.name}, Video out: {response.get('video_file')}")
         return response

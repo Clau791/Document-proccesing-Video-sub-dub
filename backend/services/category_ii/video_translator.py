@@ -129,6 +129,7 @@ class VideoTranslator:
         path = Path(filepath)
         out_video = self.processed_dir / f"{path.stem}_{dest_lang}{path.suffix}"
         shutil.copyfile(str(path), str(out_video))
+        print(f"[VIDEO TRANSLATE] Start {path.name} ({src_lang}→{dest_lang})")
 
         # Transcriere audio
         transcript = ""
@@ -136,9 +137,11 @@ class VideoTranslator:
         try:
             audio_path = self.processed_dir / f"{path.stem}_raw.wav"
             self._extract_audio(path, audio_path)
+            print(f"[VIDEO TRANSLATE] Audio extras: {audio_path.name}")
             model = self._get_whisper()
             res = model.transcribe(str(audio_path), language=src_lang if src_lang != "auto" else None)
             transcript = res.get("text", "").strip()
+            print(f"[VIDEO TRANSLATE] Transcriere completă, lungime {len(transcript)} caractere")
         except Exception as e:
             transcript = f"[Transcription failed: {e}]"
         finally:
@@ -153,9 +156,13 @@ class VideoTranslator:
         if transcript:
             parts = [p.strip() for p in transcript.split(".") if p.strip()]
             insight = " / ".join(parts[:2]) if parts else transcript[:200]
+        if insight:
+            print(f"[VIDEO TRANSLATE] Insight generat: {insight[:120]}...")
 
         # Rezumat AI (dacă există cheie)
         summary = self._summarize(transcript)
+        if summary:
+            print(f"[VIDEO TRANSLATE] Rezumat generat (LLM): {summary[:120]}...")
 
         # Salvează transcript+insight într-un fișier text
         txt_path = self.processed_dir / f"{path.stem}_{dest_lang}.txt"

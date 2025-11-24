@@ -3,6 +3,8 @@ import { Video, Upload, Link as LinkIcon, ExternalLink, Loader2 } from "lucide-r
 import { uploadFile, BASE_URL } from "../lib/api";
 
 const RedubVideoPage: React.FC = () => {
+  const shortName = (name: string) => name.length > 50 ? `${name.slice(0, 47)}...` : name;
+
   const [queue, setQueue] = useState<File[]>([]);
   const [urlQueue, setUrlQueue] = useState<string[]>([]);
   const [destLang, setDestLang] = useState<string>('en');
@@ -216,7 +218,7 @@ const RedubVideoPage: React.FC = () => {
                 )}
               </div>
 
-              {queue.length > 0 && (
+              {(queue.length > 0 || urlQueue.length > 0) && (
                 <button
                   onClick={handleUploadQueue}
                   disabled={loading}
@@ -233,7 +235,7 @@ const RedubVideoPage: React.FC = () => {
                 <p className="text-sm font-semibold text-gray-700">Coadă video:</p>
                 {queue.map((f) => (
                   <div key={f.name} className="flex items-center justify-between bg-white/70 border border-gray-200 rounded-lg px-3 py-2 gap-2 min-w-0">
-                    <span className="text-sm text-gray-800 truncate flex-1 min-w-0">{f.name}</span>
+                    <span className="text-sm text-gray-800 truncate flex-1 min-w-0" title={f.name}>{shortName(f.name)}</span>
                     <button
                       onClick={() => setQueue((prev) => prev.filter(x => x.name !== f.name))}
                       className="text-xs text-red-600 hover:underline"
@@ -249,8 +251,8 @@ const RedubVideoPage: React.FC = () => {
                 <p className="text-sm font-semibold text-gray-700">Coadă link-uri:</p>
                 {urlQueue.map((u) => (
                   <div key={u} className="flex items-center justify-between bg-orange-50 border border-orange-200 rounded-lg px-3 py-2 gap-2 min-w-0">
-                    <a href={u} target="_blank" rel="noreferrer" className="text-sm text-orange-700 truncate flex-1 min-w-0">
-                      {u}
+                    <a href={u} target="_blank" rel="noreferrer" className="text-sm text-orange-700 truncate flex-1 min-w-0" title={u}>
+                      {shortName(u)}
                     </a>
                     <button
                       onClick={() => removeUrl(u)}
@@ -283,14 +285,14 @@ const RedubVideoPage: React.FC = () => {
             {results.length > 0 && (
               <div className="mt-6 p-6 bg-green-50 border border-green-200 rounded-xl text-left space-y-3">
                 <h3 className="font-bold text-green-800 mb-2">✅ Redublare completă!</h3>
-                {results.map((res, idx) => (
-                  <div key={`${res.originalFile}-${idx}`} className="p-3 rounded-xl border border-green-100 bg-white/60 space-y-2 min-w-0">
-                    <p className="flex items-center gap-2 min-w-0">
-                      <strong className="whitespace-nowrap">Fișier original:</strong>
-                      <span className="truncate text-gray-800 flex-1 min-w-0" title={res.originalFile}>{res.originalFile}</span>
-                    </p>
-                    <p><strong>Limba originală:</strong> {res.originalLanguage}</p>
-                    <p><strong>Limba țintă:</strong> {res.targetLanguage}</p>
+                    {results.map((res, idx) => (
+                      <div key={`${res.originalFile}-${idx}`} className="p-3 rounded-xl border border-green-100 bg-white/60 space-y-2 min-w-0">
+                        <p className="flex items-center gap-2 min-w-0">
+                          <strong className="whitespace-nowrap">Fișier original:</strong>
+                          <span className="truncate text-gray-800 flex-1 min-w-0" title={res.originalFile}>{shortName(res.originalFile)}</span>
+                        </p>
+                        <p><strong>Limba originală:</strong> {res.originalLanguage}</p>
+                        <p><strong>Limba țintă:</strong> {res.targetLanguage}</p>
                     <div className="flex flex-wrap gap-2">
                       {(res.video_file || res.downloadUrl) && (
                         <div className="button-wrap button-wrap-green">
@@ -354,7 +356,7 @@ const RedubVideoPage: React.FC = () => {
                   <div className="space-y-2 text-sm text-gray-700">
                     {results.map((res, idx) => (
                       <div key={`ins-${idx}`} className="p-2 rounded-xl bg-emerald-50 border border-emerald-100">
-                        <p className="text-xs text-gray-500 truncate" title={res.originalFile}>{res.originalFile}</p>
+                        <p className="text-xs text-gray-500 truncate" title={res.originalFile}>{shortName(res.originalFile)}</p>
                         <p className="font-semibold text-emerald-700 mb-1">Insight</p>
                         <p className="leading-relaxed whitespace-pre-line">{res.summary || res.insight || "Nu a fost generat insight."}</p>
                       </div>

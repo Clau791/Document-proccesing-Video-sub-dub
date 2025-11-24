@@ -3,6 +3,8 @@ import { Subtitles, Upload, Download, Link as LinkIcon, ExternalLink } from "luc
 import { uploadFile, BASE_URL } from "../lib/api";
 
 const SubtitleROPage: React.FC = () => {
+  const shortName = (name: string) => name.length > 50 ? `${name.slice(0, 47)}...` : name;
+
   const [queue, setQueue] = useState<File[]>([]);
   const [urlQueue, setUrlQueue] = useState<string[]>([]);
   const [attachMode, setAttachMode] = useState<string>('hard');
@@ -311,7 +313,7 @@ const SubtitleROPage: React.FC = () => {
                     <p className="text-sm font-semibold text-gray-700">Coadă video:</p>
                     {queue.map((f) => (
                       <div key={f.name} className="flex items-center justify-between bg-white/70 border border-gray-200 rounded-lg px-3 py-2 gap-2 min-w-0">
-                        <span className="text-sm text-gray-800 truncate flex-1 min-w-0">{f.name}</span>
+                        <span className="text-sm text-gray-800 truncate flex-1 min-w-0" title={f.name}>{shortName(f.name)}</span>
                         <button
                           onClick={() => removeFromQueue(f.name)}
                           className="text-xs text-red-600 hover:underline"
@@ -327,8 +329,8 @@ const SubtitleROPage: React.FC = () => {
                     <p className="text-sm font-semibold text-gray-700">Coadă link-uri:</p>
                     {urlQueue.map((u) => (
                       <div key={u} className="flex items-center justify-between bg-orange-50 border border-orange-200 rounded-lg px-3 py-2 gap-2 min-w-0">
-                        <a href={u} target="_blank" rel="noreferrer" className="text-sm text-orange-700 truncate flex-1 min-w-0">
-                          {u}
+                        <a href={u} target="_blank" rel="noreferrer" className="text-sm text-orange-700 truncate flex-1 min-w-0" title={u}>
+                          {shortName(u)}
                         </a>
                         <button
                           onClick={() => removeUrl(u)}
@@ -366,7 +368,7 @@ const SubtitleROPage: React.FC = () => {
                       <div key={`${res.originalFile}-${idx}`} className="p-3 rounded-xl border border-green-100 bg-white/70 space-y-2 min-w-0">
                         <p className="flex items-center gap-2 min-w-0">
                           <strong className="whitespace-nowrap">Fișier original:</strong>
-                          <span className="truncate text-gray-800 flex-1 min-w-0" title={res.originalFile}>{res.originalFile}</span>
+                          <span className="truncate text-gray-800 flex-1 min-w-0" title={res.originalFile}>{shortName(res.originalFile)}</span>
                         </p>
                         {res.subtitle_file && <p><strong>Fișier SRT:</strong> {res.subtitle_file}</p>}
                         {res.segments && <p><strong>Total segmente:</strong> {res.segments}</p>}
