@@ -103,8 +103,14 @@ class SummaryService:
     def _llm_generate(self, prompt: str) -> str:
         out = self._ollama_generate(prompt)
         if out:
+            print("[SUMMARY LLM] Ollama (qwen) utilizat.")
             return out
-        return self._gemini_generate(prompt)
+        alt = self._gemini_generate(prompt)
+        if alt:
+            print("[SUMMARY LLM] Gemini fallback utilizat.")
+        else:
+            print("[SUMMARY LLM] Fallback simplu (fără LLM).")
+        return alt
 
     def _chunk_text(self, text: str, chunk_size: int = None) -> List[str]:
         chunk_size = chunk_size or self.chunk_size

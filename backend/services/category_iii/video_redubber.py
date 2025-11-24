@@ -39,7 +39,14 @@ class LocalTTSEngine:
         self.speaker_wav = speaker_wav
         try:
             from TTS.api import TTS  # type: ignore
-            self.tts = TTS(model_name=model_name, progress_bar=False, gpu=use_gpu)
+            self.tts = TTS(model_name=model_name, progress_bar=False)
+            # Mutăm explicit pe device; înlocuiește avertizarea tts.gpu
+            device = "cuda" if use_gpu and torch.cuda.is_available() else "cpu"
+            try:
+                self.tts.to(device)
+            except Exception:
+                # fallback silențios; Coqui poate ignora .to în funcție de versiune
+                pass
         except ImportError as e:
             raise RuntimeError(
                 "TTS nu este instalat. Instalează un model local calitativ cu `pip install TTS` "

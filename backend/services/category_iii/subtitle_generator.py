@@ -184,6 +184,7 @@ class SubtitleGenerator:
         """
         video_path = Path(filepath)
         attach_mode = (attach_mode or "soft").lower()
+        print(f"[SUBTITLE] attach_mode={attach_mode}, detail_level={detail_level}")
         self._global_start = time.time()
 
         duration = self._probe_duration(video_path)

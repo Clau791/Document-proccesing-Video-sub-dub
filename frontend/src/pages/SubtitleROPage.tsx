@@ -310,8 +310,8 @@ const SubtitleROPage: React.FC = () => {
                   <div className="mt-4 space-y-2 text-left">
                     <p className="text-sm font-semibold text-gray-700">Coadă video:</p>
                     {queue.map((f) => (
-                      <div key={f.name} className="flex items-center justify-between bg-white/70 border border-gray-200 rounded-lg px-3 py-2">
-                        <span className="text-sm text-gray-800 truncate">{f.name}</span>
+                      <div key={f.name} className="flex items-center justify-between bg-white/70 border border-gray-200 rounded-lg px-3 py-2 gap-2 min-w-0">
+                        <span className="text-sm text-gray-800 truncate flex-1 min-w-0">{f.name}</span>
                         <button
                           onClick={() => removeFromQueue(f.name)}
                           className="text-xs text-red-600 hover:underline"
@@ -326,8 +326,8 @@ const SubtitleROPage: React.FC = () => {
                   <div className="mt-4 space-y-2 text-left">
                     <p className="text-sm font-semibold text-gray-700">Coadă link-uri:</p>
                     {urlQueue.map((u) => (
-                      <div key={u} className="flex items-center justify-between bg-orange-50 border border-orange-200 rounded-lg px-3 py-2">
-                        <a href={u} target="_blank" rel="noreferrer" className="text-sm text-orange-700 truncate flex-1 mr-2">
+                      <div key={u} className="flex items-center justify-between bg-orange-50 border border-orange-200 rounded-lg px-3 py-2 gap-2 min-w-0">
+                        <a href={u} target="_blank" rel="noreferrer" className="text-sm text-orange-700 truncate flex-1 min-w-0">
                           {u}
                         </a>
                         <button
@@ -363,17 +363,20 @@ const SubtitleROPage: React.FC = () => {
                   <div className="mt-6 p-6 bg-green-50 border border-green-200 rounded-xl text-left space-y-4">
                     <h3 className="font-bold text-green-800 mb-2">✅ Subtitrări generate</h3>
                     {results.map((res, idx) => (
-                      <div key={`${res.originalFile}-${idx}`} className="p-3 rounded-xl border border-green-100 bg-white/70 space-y-2">
-                        <p><strong>Fișier original:</strong> {res.originalFile}</p>
+                      <div key={`${res.originalFile}-${idx}`} className="p-3 rounded-xl border border-green-100 bg-white/70 space-y-2 min-w-0">
+                        <p className="flex items-center gap-2 min-w-0">
+                          <strong className="whitespace-nowrap">Fișier original:</strong>
+                          <span className="truncate text-gray-800 flex-1 min-w-0" title={res.originalFile}>{res.originalFile}</span>
+                        </p>
                         {res.subtitle_file && <p><strong>Fișier SRT:</strong> {res.subtitle_file}</p>}
                         {res.segments && <p><strong>Total segmente:</strong> {res.segments}</p>}
-                        <div className="flex flex-wrap gap-3">
+                        <div className="flex flex-wrap gap-2">
                           {(res.video_file || res.downloadUrl || res.subtitle_file) && (
                             <div className="button-wrap button-wrap-green">
                               <div className="button-shadow"></div>
                               <a
                                 href={`http://localhost:5000${res.video_file || res.downloadUrl || res.subtitle_file}`}
-                                className="glass-btn glass-btn-green flex items-center gap-2 px-4"
+                                className="glass-btn glass-btn-green inline-flex items-center gap-2 px-3 py-2"
                                 download
                               >
                                 <Download className="w-4 h-4" />
@@ -386,7 +389,7 @@ const SubtitleROPage: React.FC = () => {
                               <div className="button-shadow"></div>
                               <a
                                 href={`http://localhost:5000${res.subtitle_file}`}
-                                className="glass-btn glass-btn-blue flex items-center gap-2 px-4"
+                                className="glass-btn glass-btn-blue inline-flex items-center gap-2 px-3 py-2"
                                 download
                               >
                                 <Download className="w-4 h-4" />
@@ -399,7 +402,7 @@ const SubtitleROPage: React.FC = () => {
                               <div className="button-shadow"></div>
                               <a
                                 href={`http://localhost:5000${res.video_file}`}
-                                className="glass-btn glass-btn-purple flex items-center gap-2 px-4"
+                                className="glass-btn glass-btn-purple inline-flex items-center gap-2 px-3 py-2"
                                 download
                               >
                                 <Download className="w-4 h-4" />
@@ -412,7 +415,7 @@ const SubtitleROPage: React.FC = () => {
                               <div className="button-shadow"></div>
                               <a
                                 href={`http://localhost:5000${res.summary_file}`}
-                                className="glass-btn glass-btn-green flex items-center gap-2 px-4"
+                                className="glass-btn glass-btn-green inline-flex items-center gap-2 px-3 py-2"
                                 download
                               >
                                 <Download className="w-4 h-4" />
