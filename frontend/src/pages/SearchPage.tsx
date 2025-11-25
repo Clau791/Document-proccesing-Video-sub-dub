@@ -103,7 +103,7 @@ const SearchPage: React.FC = () => {
               )}
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              {item.download_url ? (
+              {item.download_url && (
                 <a
                   href={`${BASE_URL}${item.download_url}`}
                   className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm max-w-full"
@@ -112,8 +112,6 @@ const SearchPage: React.FC = () => {
                   <Download className="w-4 h-4" />
                   <span className="truncate max-w-[160px]" title="Descarcă">Descarcă</span>
                 </a>
-              ) : (
-                <span className="text-xs text-gray-400">Fără fișier</span>
               )}
               {item.summary_url && (
                 <a
@@ -124,6 +122,19 @@ const SearchPage: React.FC = () => {
                   <Download className="w-4 h-4" />
                   <span className="truncate max-w-[160px]" title="Rezumat">Rezumat</span>
                 </a>
+              )}
+              {item.meta && item.meta.subtitle_url && (
+                <a
+                  href={`${BASE_URL}${item.meta.subtitle_url}`}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 text-sm max-w-full"
+                  download
+                >
+                  <Download className="w-4 h-4" />
+                  <span className="truncate max-w-[160px]" title="SRT">SRT</span>
+                </a>
+              )}
+              {!item.download_url && !item.summary_url && !(item.meta && item.meta.subtitle_url) && (
+                <span className="text-xs text-gray-400">Fără fișier</span>
               )}
             </div>
           </div>

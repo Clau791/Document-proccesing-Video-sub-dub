@@ -7,6 +7,7 @@ import threading
 import time
 from pathlib import Path
 from typing import List, Tuple
+import requests
 
 import ffmpeg
 import pysubs2

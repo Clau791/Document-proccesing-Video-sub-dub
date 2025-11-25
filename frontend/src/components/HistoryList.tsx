@@ -7,6 +7,7 @@ type HistoryItem = {
   service: string;
   original_file: string;
   download_url: string;
+  summary_url?: string;
   status: string;
   created_at: string;
   meta?: Record<string, any>;
@@ -73,7 +74,7 @@ const HistoryList: React.FC = () => {
                   <span className="text-gray-600 text-xs">{item.original_file}</span>
                   <span className="text-gray-400 text-xs">{new Date(item.created_at).toLocaleString()}</span>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   {item.download_url && (
                     <a
                       href={`${BASE_URL}${item.download_url}`}
@@ -92,7 +93,16 @@ const HistoryList: React.FC = () => {
                       Rezumat
                     </a>
                   )}
-                  {!item.download_url && !item.summary_url && (
+                  {item.meta && item.meta.subtitle_url && (
+                    <a
+                      href={`${BASE_URL}${item.meta.subtitle_url}`}
+                      className="px-3 py-1 text-xs rounded-lg bg-purple-500 text-white hover:bg-purple-600"
+                      download
+                    >
+                      SRT
+                    </a>
+                  )}
+                  {!item.download_url && !item.summary_url && !(item.meta && item.meta.subtitle_url) && (
                     <span className="text-xs text-gray-400">Fără fișier</span>
                   )}
                 </div>

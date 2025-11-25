@@ -25,6 +25,7 @@ def init_db():
                 download_url TEXT,
                 summary_url TEXT,
                 summary_text TEXT,
+                srt_text TEXT,
                 status TEXT,
                 meta TEXT,
                 created_at TEXT NOT NULL
@@ -37,6 +38,8 @@ def init_db():
             conn.execute("ALTER TABLE history ADD COLUMN summary_url TEXT")
         if "summary_text" not in cols:
             conn.execute("ALTER TABLE history ADD COLUMN summary_text TEXT")
+        if "srt_text" not in cols:
+            conn.execute("ALTER TABLE history ADD COLUMN srt_text TEXT")
 
         # Populate summary_text for rows that have summary_url but empty summary_text
         try:
@@ -57,7 +60,7 @@ def init_db():
         conn.execute(
             """
             CREATE VIRTUAL TABLE history_fts USING fts5(
-                service, original_file, download_url, summary_url, summary_text, meta_text, created_at,
+                service, original_file, download_url, summary_url, summary_text, srt_text, meta_text, created_at,
                 content='history', content_rowid='id'
             )
             """
@@ -67,8 +70,8 @@ def init_db():
         # Backfill FTS
         conn.execute(
             """
-            INSERT INTO history_fts(rowid, service, original_file, download_url, summary_url, summary_text, meta_text, created_at)
-            SELECT id, service, original_file, download_url, summary_url, COALESCE(summary_text, ''), COALESCE(meta, ''), created_at FROM history
+            INSERT INTO history_fts(rowid, service, original_file, download_url, summary_url, summary_text, srt_text, meta_text, created_at)
+            SELECT id, service, original_file, download_url, summary_url, COALESCE(summary_text, ''), COALESCE(srt_text, ''), COALESCE(meta, ''), created_at FROM history
             """
         )
         conn.commit()
@@ -97,17 +100,34 @@ def _read_summary_text(summary_url: Optional[str]) -> str:
         return ""
     return ""
 
+def _read_srt_text(subtitle_url: Optional[str]) -> str:
+    if not subtitle_url:
+        return ""
+    try:
+        name = Path(subtitle_url).name
+        candidates = [Path("processed") / name, Path(subtitle_url)]
+        for p in candidates:
+            if p.exists():
+                return p.read_text(encoding="utf-8", errors="ignore")
+    except Exception:
+        return ""
+    return ""
+
 
 def add_history(service: str, original_file: str, download_url: Optional[str], status: str = "success", meta: Optional[Dict[str, Any]] = None, summary_url: Optional[str] = None, summary_text: Optional[str] = None):
     meta_json = json.dumps(meta or {})
     meta_text = _meta_to_text(meta)
-    summary_txt = summary_text if summary_text is not None else _read_summary_text(summary_url)
+    subtitle_url = ""
+    if meta and isinstance(meta, dict):
+        subtitle_url = meta.get("subtitle_url", "") or meta.get("subtitle_file", "")
+    summary_txt = summary_text if (summary_text not in (None, "")) else _read_summary_text(summary_url)
+    srt_txt = _read_srt_text(subtitle_url)
     created = datetime.utcnow().isoformat()
     with _get_conn() as conn:
         cur = conn.execute(
             """
-            INSERT INTO history (service, original_file, download_url, summary_url, summary_text, status, meta, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO history (service, original_file, download_url, summary_url, summary_text, srt_text, status, meta, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 service,
@@ -115,6 +135,7 @@ def add_history(service: str, original_file: str, download_url: Optional[str], s
                 download_url or "",
                 summary_url or "",
                 summary_txt,
+                srt_txt,
                 status,
                 meta_json,
                 created
@@ -123,10 +144,10 @@ def add_history(service: str, original_file: str, download_url: Optional[str], s
         rowid = cur.lastrowid
         conn.execute(
             """
-            INSERT INTO history_fts(rowid, service, original_file, download_url, summary_url, summary_text, meta_text, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO history_fts(rowid, service, original_file, download_url, summary_url, summary_text, srt_text, meta_text, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (rowid, service, original_file, download_url or "", summary_url or "", summary_txt, meta_text, created)
+            (rowid, service, original_file, download_url or "", summary_url or "", summary_txt, srt_txt, meta_text, created)
         )
         conn.commit()
 
@@ -171,13 +192,13 @@ def search_history(query: str, limit: int = 30) -> List[Dict[str, Any]]:
             like = f"%{query}%"
             cur = conn.execute(
                 """
-                SELECT id, service, original_file, download_url, summary_url, summary_text, status, meta, created_at
+                SELECT id, service, original_file, download_url, summary_url, summary_text, srt_text, status, meta, created_at
                 FROM history
-                WHERE service LIKE ? OR original_file LIKE ? OR meta LIKE ? OR summary_url LIKE ? OR summary_text LIKE ?
+                WHERE service LIKE ? OR original_file LIKE ? OR meta LIKE ? OR summary_url LIKE ? OR summary_text LIKE ? OR srt_text LIKE ?
                 ORDER BY id DESC
                 LIMIT ?
                 """,
-                (like, like, like, like, like, limit)
+                (like, like, like, like, like, like, limit)
             )
         rows = cur.fetchall()
         result = []

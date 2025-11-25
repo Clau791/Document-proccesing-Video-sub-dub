@@ -205,34 +205,43 @@ const RedubVideoPage: React.FC = () => {
                   </button>
                 </div>
                 {showUrlInput && (
-                  <div className="mt-3 p-3 rounded-xl border border-orange-200 bg-white/70 space-y-2">
-                    <input
-                      type="text"
-                      value={videoUrl}
-                      onChange={(e) => setVideoUrl(e.target.value)}
-                      placeholder="https://www.youtube.com/watch?v=..."
-                      className="w-full px-3 py-2 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-400"
-                    />
-                    {urlError && <p className="text-xs text-red-600">{urlError}</p>}
-                    <div className="flex flex-wrap gap-2">
-                      {isValidVideoUrl(videoUrl) && (
-                        <a
-                          href={videoUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center gap-2 px-3 py-2 text-xs rounded-lg bg-orange-100 text-orange-700 border border-orange-200 hover:bg-orange-200"
+                  <div className="mt-3 relative rounded-xl overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-r from-orange-100 via-amber-50 to-orange-100 opacity-80" />
+                    <div className="relative p-4 border border-orange-200/80 backdrop-blur-sm rounded-xl shadow-sm space-y-3">
+                      <div className="flex items-center gap-2 text-orange-700 font-semibold text-sm">
+                        <div className="w-8 h-8 rounded-lg bg-orange-500/20 flex items-center justify-center border border-orange-200">
+                          <LinkIcon className="w-4 h-4" />
+                        </div>
+                        <span>Adaugă link YouTube / Rutube</span>
+                      </div>
+                      <input
+                        type="text"
+                        value={videoUrl}
+                        onChange={(e) => setVideoUrl(e.target.value)}
+                        placeholder="https://www.youtube.com/watch?v=..."
+                        className="w-full px-3 py-2 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-400 bg-white/80"
+                      />
+                      {urlError && <p className="text-xs text-red-600">{urlError}</p>}
+                      <div className="flex flex-wrap gap-2">
+                        {isValidVideoUrl(videoUrl) && (
+                          <a
+                            href={videoUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-2 px-3 py-2 text-xs rounded-lg bg-orange-100 text-orange-700 border border-orange-200 hover:bg-orange-200"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                            Preview
+                          </a>
+                        )}
+                        <button
+                          type="button"
+                          onClick={addUrlToQueue}
+                          className="px-3 py-2 text-xs rounded-lg bg-orange-500 text-white hover:bg-orange-600 shadow-sm"
                         >
-                          <ExternalLink className="w-4 h-4" />
-                          Preview
-                        </a>
-                      )}
-                      <button
-                        type="button"
-                        onClick={addUrlToQueue}
-                        className="px-3 py-2 text-xs rounded-lg bg-orange-500 text-white hover:bg-orange-600"
-                      >
-                        Adaugă în coadă
-                      </button>
+                          Adaugă în coadă
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}

@@ -48,12 +48,13 @@ ALLOWED_EXTENSIONS = {
     'image': {'jpg', 'jpeg', 'png', 'tiff', 'bmp'},
     'translate-doc': {'pdf', 'docx', 'pptx'},
     'translate-audio': {'mp3', 'wav', 'm4a', 'ogg', 'flac'},
-    'translate-video': {'mp4', 'avi', 'mov', 'mkv', 'webm'},
-    'subtitle': {'mp4', 'avi', 'mov', 'mkv', 'webm'},
-    'redub': {'mp4', 'avi', 'mov', 'mkv', 'webm'},
+    'translate-video': {'mp4', 'avi', 'mov', 'mkv', 'webm', 'mpeg', 'mpg'},
+    'subtitle': {'mp4', 'avi', 'mov', 'mkv', 'webm', 'mpeg', 'mpg'},
+    'redub': {'mp4', 'avi', 'mov', 'mkv', 'webm', 'mpeg', 'mpg'},
 }
 
-YOUTUBE_RUTUBE_REGEX = re.compile(r"(youtube\\.com/watch\\?v=|youtu\\.be/|rutube\\.ru/)", re.IGNORECASE)
+# Acceptă youtube.com cu orice parametri ce includ v=, plus youtu.be și rutube.ru
+YOUTUBE_RUTUBE_REGEX = re.compile(r"(youtube\.com/.*[?&]v=|youtu\.be/|rutube\.ru/)", re.IGNORECASE)
 
 # ============================================
 # UTILITY FUNCTIONS
@@ -93,19 +94,65 @@ def download_video_from_url(url: str, target_dir: str, prefix: str = "yt") -> st
     target = Path(target_dir)
     target.mkdir(parents=True, exist_ok=True)
     out_tmpl = str(target / f"{prefix}_%(id)s.%(ext)s")
-    ydl_opts = {
+
+    def try_download(opts):
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            filepath = ydl.prepare_filename(info)
+            merged = Path(filepath).with_suffix(".mp4")
+            if merged.exists():
+                filepath = str(merged)
+            fp = Path(filepath)
+            if fp.exists() and fp.stat().st_size > 0:
+                return filepath
+        return ""
+
+    po_token = os.getenv("YT_PO_TOKEN") or os.getenv("YTDLP_PO_TOKEN")
+    android_po = [f"android+{po_token}"] if po_token else []
+
+    common = {
         'outtmpl': out_tmpl,
-        'format': 'mp4/bestvideo+bestaudio/best',
         'merge_output_format': 'mp4',
         'quiet': True,
+        'noplaylist': True,
+        'ignoreerrors': True,
+        'http_headers': {
+            'User-Agent': 'Mozilla/5.0',
+        },
+        'geo_bypass': True,
+        'concurrent_fragment_downloads': 4,
     }
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=True)
-        filepath = ydl.prepare_filename(info)
-        merged = Path(filepath).with_suffix(".mp4")
-        if merged.exists():
-            filepath = str(merged)
-        return filepath
+
+    attempts = [
+        # default web client
+        {**common, 'format': 'bv*+ba/best', 'extractor_args': {'youtube': {'player_client': []}}},
+        {**common, 'format': 'best', 'extractor_args': {'youtube': {'player_client': []}}},
+        # iOS fallback
+        {**common, 'format': 'bv*+ba/best', 'extractor_args': {'youtube': {'player_client': ['ios']}}},
+        {**common, 'format': 'best', 'extractor_args': {'youtube': {'player_client': ['ios']}}},
+        # Android client (needs PO token for some formats)
+        {**common, 'format': 'bv*+ba/best', 'extractor_args': {'youtube': {'player_client': ['android'], 'po_token': android_po}}},
+        {**common, 'format': 'best', 'extractor_args': {'youtube': {'player_client': ['android'], 'po_token': android_po}}},
+    ]
+
+    # dacă avem cookies yt-dlp, adaugă cookiefile
+    cookiefile = os.getenv("YTDLP_COOKIES") or os.getenv("YT_COOKIES")
+    if cookiefile and Path(cookiefile).exists():
+        for opt in attempts:
+            opt['cookiefile'] = cookiefile
+
+    last_error = None
+    for opts in attempts:
+        try:
+            fp = try_download(opts)
+            if fp:
+                return fp
+        except Exception as e:
+            last_error = e
+            continue
+
+    raise RuntimeError(f"Download video eșuat (yt_dlp). {last_error or ''}. "
+                       f"Încearcă să setezi YT_PO_TOKEN/ YTDLP_COOKIES pentru linkuri protejate.")
 
 def generate_unique_filename(original_filename):
     """Generează nume unic pentru fișier"""
@@ -537,7 +584,10 @@ def translate_video_url():
         if not url or not validate_video_url(url):
             return jsonify({'error': 'Link invalid (acceptat: youtube sau rutube)'}), 400
 
-        filepath = download_video_from_url(url, UPLOAD_FOLDER, prefix="transvid")
+        try:
+            filepath = download_video_from_url(url, UPLOAD_FOLDER, prefix="transvid")
+        except Exception as e:
+            return jsonify({'error': f'Eșec descărcare: {e}'}), 400
         filename = Path(filepath).name
 
         print(f"\n[TRANSLATE VIDEO URL] AUTO → RO: {url}")
@@ -604,6 +654,7 @@ def subtitle_ro():
             'originalFile': filename,
             'downloadUrl': result.get('video_file', ''),
             'summaryUrl': result.get('summary_file', ''),
+            'subtitleUrl': result.get('subtitle_file', ''),
             'status': 'success',
             **result
         }
@@ -611,7 +662,12 @@ def subtitle_ro():
             'subtitle-ro',
             filename,
             response_payload.get('downloadUrl'),
-            meta={'attach': attach_mode, 'detail': detail_level, 'translator_mode': translator_mode},
+            meta={
+                'attach': attach_mode,
+                'detail': detail_level,
+                'translator_mode': translator_mode,
+                'subtitle_url': response_payload.get('subtitleUrl')
+            },
             summary_url=response_payload.get('summaryUrl') or result.get('summary_file'),
             summary_text=result.get('summary_text') or ""
         )
@@ -668,7 +724,12 @@ def redub_video():
             'redub-video',
             filename,
             response_payload.get('downloadUrl'),
-            meta={'target_lang': dest_lang, 'translator_mode': translator_mode, 'detail_level': detail_level},
+            meta={
+                'target_lang': dest_lang,
+                'translator_mode': translator_mode,
+                'detail_level': detail_level,
+                'subtitle_url': response_payload.get('subtitleUrl')
+            },
             summary_url=response_payload.get('summaryUrl') or result.get('summary_file'),
             summary_text=result.get('summary_text') or ""
         )
@@ -690,8 +751,10 @@ def redub_video_url():
         detail_level = data.get('detail_level', 'medium')
         if not url or not validate_video_url(url):
             return jsonify({'error': 'Link invalid (acceptat: youtube sau rutube)'}), 400
-
-        filepath = download_video_from_url(url, UPLOAD_FOLDER, prefix="redub")
+        try:
+            filepath = download_video_from_url(url, UPLOAD_FOLDER, prefix="redub")
+        except Exception as e:
+            return jsonify({'error': f'Eșec descărcare: {e}'}), 400
         filename = Path(filepath).name
 
         print(f"\n[REDUB URL] AUTO → {dest_lang.upper()}: {url}")
@@ -715,7 +778,13 @@ def redub_video_url():
             'redub-video',
             filename,
             response_payload.get('downloadUrl'),
-            meta={'target_lang': dest_lang, 'url': url, 'translator_mode': translator_mode, 'detail_level': detail_level},
+            meta={
+                'target_lang': dest_lang,
+                'url': url,
+                'translator_mode': translator_mode,
+                'detail_level': detail_level,
+                'subtitle_url': response_payload.get('subtitleUrl')
+            },
             summary_url=response_payload.get('summaryUrl') or result.get('summary_file'),
             summary_text=result.get('summary_text') or ""
         )
@@ -824,8 +893,10 @@ def subtitle_ro_url():
         translator_mode = data.get('translator_mode', 'cloud')
         if not url or not validate_video_url(url):
             return jsonify({'error': 'Link invalid (acceptat: youtube sau rutube)'}), 400
-
-        filepath = download_video_from_url(url, UPLOAD_FOLDER, prefix="subtitle")
+        try:
+            filepath = download_video_from_url(url, UPLOAD_FOLDER, prefix="subtitle")
+        except Exception as e:
+            return jsonify({'error': f'Eșec descărcare: {e}'}), 400
         filename = Path(filepath).name
         print(f"\n[SUBTITLE URL] Mode: {attach_mode}, Detail: {detail_level}, URL: {url}")
 
@@ -837,6 +908,7 @@ def subtitle_ro_url():
             'originalFile': filename,
             'downloadUrl': result.get('video_file', ''),
             'summaryUrl': result.get('summary_file', ''),
+            'subtitleUrl': result.get('subtitle_file', ''),
             'status': 'success',
             **result
         }
@@ -844,7 +916,13 @@ def subtitle_ro_url():
             'subtitle-ro',
             filename,
             response_payload.get('downloadUrl'),
-            meta={'attach': attach_mode, 'detail': detail_level, 'url': url, 'translator_mode': translator_mode},
+            meta={
+                'attach': attach_mode,
+                'detail': detail_level,
+                'url': url,
+                'translator_mode': translator_mode,
+                'subtitle_url': response_payload.get('subtitleUrl')
+            },
             summary_url=response_payload.get('summaryUrl') or result.get('summary_file'),
             summary_text=result.get('summary_text') or ""
         )

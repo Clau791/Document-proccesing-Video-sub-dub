@@ -39,6 +39,14 @@ class LocalTTSEngine:
         self.speaker_wav = speaker_wav
         try:
             from TTS.api import TTS  # type: ignore
+            try:
+                from TTS.tts.configs.xtts_config import XttsConfig  # type: ignore
+                from TTS.tts.models.xtts import XttsAudioConfig  # type: ignore
+                from TTS.config.shared_configs import BaseDatasetConfig  # type: ignore
+                from torch.serialization import add_safe_globals  # type: ignore
+                add_safe_globals({XttsConfig, XttsAudioConfig, BaseDatasetConfig})
+            except Exception:
+                pass
             self.tts = TTS(model_name=model_name, progress_bar=False)
             # Mutăm explicit pe device; înlocuiește avertizarea tts.gpu
             device = "cuda" if use_gpu and torch.cuda.is_available() else "cpu"

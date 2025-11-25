@@ -265,34 +265,43 @@ const SubtitleROPage: React.FC = () => {
                       </button>
                     </div>
                     {showUrlInput && (
-                      <div className="mt-3 p-3 rounded-xl border border-orange-200 bg-white/70 space-y-2">
-                        <input
-                          type="text"
-                          value={videoUrl}
-                          onChange={(e) => setVideoUrl(e.target.value)}
-                          placeholder="https://www.youtube.com/watch?v=..."
-                          className="w-full px-3 py-2 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-400"
-                        />
-                        {urlError && <p className="text-xs text-red-600">{urlError}</p>}
-                        <div className="flex flex-wrap gap-2">
-                          {isValidVideoUrl(videoUrl) && (
-                            <a
-                              href={videoUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-2 px-3 py-2 text-xs rounded-lg bg-orange-100 text-orange-700 border border-orange-200 hover:bg-orange-200"
+                      <div className="mt-3 relative rounded-xl overflow-hidden">
+                        <div className="absolute inset-0 bg-gradient-to-r from-orange-100 via-amber-50 to-orange-100 opacity-80" />
+                        <div className="relative p-4 border border-orange-200/80 backdrop-blur-sm rounded-xl shadow-sm space-y-3">
+                          <div className="flex items-center gap-2 text-orange-700 font-semibold text-sm">
+                            <div className="w-8 h-8 rounded-lg bg-orange-500/20 flex items-center justify-center border border-orange-200">
+                              <LinkIcon className="w-4 h-4" />
+                            </div>
+                            <span>Adaugă link YouTube / Rutube</span>
+                          </div>
+                          <input
+                            type="text"
+                            value={videoUrl}
+                            onChange={(e) => setVideoUrl(e.target.value)}
+                            placeholder="https://www.youtube.com/watch?v=..."
+                            className="w-full px-3 py-2 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-400 bg-white/80"
+                          />
+                          {urlError && <p className="text-xs text-red-600">{urlError}</p>}
+                          <div className="flex flex-wrap gap-2">
+                            {isValidVideoUrl(videoUrl) && (
+                              <a
+                                href={videoUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-2 px-3 py-2 text-xs rounded-lg bg-orange-100 text-orange-700 border border-orange-200 hover:bg-orange-200"
+                              >
+                                <ExternalLink className="w-4 h-4" />
+                                Preview
+                              </a>
+                            )}
+                            <button
+                              type="button"
+                              onClick={addUrlToQueue}
+                              className="px-3 py-2 text-xs rounded-lg bg-orange-500 text-white hover:bg-orange-600 shadow-sm"
                             >
-                              <ExternalLink className="w-4 h-4" />
-                              Preview
-                            </a>
-                          )}
-                          <button
-                            type="button"
-                            onClick={addUrlToQueue}
-                            className="px-3 py-2 text-xs rounded-lg bg-orange-500 text-white hover:bg-orange-600"
-                          >
-                            Adaugă în coadă
-                          </button>
+                              Adaugă în coadă
+                            </button>
+                          </div>
                         </div>
                       </div>
                     )}
@@ -306,7 +315,7 @@ const SubtitleROPage: React.FC = () => {
                     ➕ Adaugă mai multe
                   </button>
 
-                  {queue.length > 0 && (
+                  {(queue.length > 0 || urlQueue.length > 0) && (
                     <div className="button-wrap button-wrap-purple w-full">
                       <div className="button-shadow"></div>
                       <button
@@ -385,37 +394,11 @@ const SubtitleROPage: React.FC = () => {
                         {res.subtitle_file && <p><strong>Fișier SRT:</strong> {res.subtitle_file}</p>}
                         {res.segments && <p><strong>Total segmente:</strong> {res.segments}</p>}
                         <div className="flex flex-wrap gap-2">
-                          {(res.video_file || res.downloadUrl || res.subtitle_file) && (
-                            <div className="button-wrap button-wrap-green">
-                              <div className="button-shadow"></div>
-                              <a
-                                href={`http://localhost:5000${res.video_file || res.downloadUrl || res.subtitle_file}`}
-                                className="glass-btn glass-btn-green inline-flex items-center gap-2 px-3 py-2"
-                                download
-                              >
-                                <Download className="w-4 h-4" />
-                                <span>Rezultat</span>
-                              </a>
-                            </div>
-                          )}
-                          {res.subtitle_file && (
-                            <div className="button-wrap button-wrap-blue">
-                              <div className="button-shadow"></div>
-                              <a
-                                href={`http://localhost:5000${res.subtitle_file}`}
-                                className="glass-btn glass-btn-blue inline-flex items-center gap-2 px-3 py-2"
-                                download
-                              >
-                                <Download className="w-4 h-4" />
-                                <span>SRT</span>
-                              </a>
-                            </div>
-                          )}
-                          {res.video_file && (
+                          {(res.video_file || res.downloadUrl) && (
                             <div className="button-wrap button-wrap-purple">
                               <div className="button-shadow"></div>
                               <a
-                                href={`http://localhost:5000${res.video_file}`}
+                                href={`${BASE_URL}${res.video_file || res.downloadUrl}`}
                                 className="glass-btn glass-btn-purple inline-flex items-center gap-2 px-3 py-2"
                                 download
                               >
@@ -424,11 +407,24 @@ const SubtitleROPage: React.FC = () => {
                               </a>
                             </div>
                           )}
+                          {res.subtitle_file && (
+                            <div className="button-wrap button-wrap-blue">
+                              <div className="button-shadow"></div>
+                              <a
+                                href={`${BASE_URL}${res.subtitle_file}`}
+                                className="glass-btn glass-btn-blue inline-flex items-center gap-2 px-3 py-2"
+                                download
+                              >
+                                <Download className="w-4 h-4" />
+                                <span>SRT</span>
+                              </a>
+                            </div>
+                          )}
                           {res.summary_file && (
                             <div className="button-wrap button-wrap-green">
                               <div className="button-shadow"></div>
                               <a
-                                href={`http://localhost:5000${res.summary_file}`}
+                                href={`${BASE_URL}${res.summary_file}`}
                                 className="glass-btn glass-btn-green inline-flex items-center gap-2 px-3 py-2"
                                 download
                               >
