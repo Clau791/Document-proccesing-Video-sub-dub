@@ -40,7 +40,11 @@ class SubtitleGenerator:
         self._total_expected = None
         self._summary_service = SummaryService()
         self._ollama_host = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
-        self._ollama_model = os.getenv("OLLAMA_MODEL", "qwen2.5:32b")
+        # Ordine preferată: calitate maximă, apoi fallback
+        self._ollama_models = [
+            os.getenv("OLLAMA_MODEL_PRIMARY", "llama3:70b"),
+            os.getenv("OLLAMA_MODEL_FALLBACK", "qwen3:30b"),
+        ]
 
     # ------------ Internals ------------
     def _load_model(self):
@@ -66,18 +70,24 @@ class SubtitleGenerator:
                 f"Output-ul trebuie să conțină DOAR traducerea în {target_lang}."
             )
             user_prompt = f"Text: {text}\nTraducere:"
-            resp = requests.post(
-                f"{self._ollama_host}/v1/completions",
-                json={
-                    "model": self._ollama_model,
-                    "prompt": f"{system_prompt}\n\n{user_prompt}",
-                    "options": {"temperature": 0.2},
-                },
-                timeout=60,
-            )
-            if resp.ok:
-                data = resp.json()
-                return (data.get("choices") or [{}])[0].get("text", "").strip()
+            for mdl in self._ollama_models:
+                try:
+                    resp = requests.post(
+                        f"{self._ollama_host}/v1/completions",
+                        json={
+                            "model": mdl,
+                            "prompt": f"{system_prompt}\n\n{user_prompt}",
+                            "options": {"temperature": 0.1},
+                        },
+                        timeout=60,
+                    )
+                    if resp.ok:
+                        data = resp.json()
+                        txt = (data.get("choices") or [{}])[0].get("text", "").strip()
+                        if txt:
+                            return txt
+                except Exception as e:
+                    logging.warning("[SUBTITLE] Ollama model %s fallback: %s", mdl, e)
         except Exception as e:
             logging.warning("[SUBTITLE] Ollama translate fallback: %s", e)
         return ""
@@ -99,10 +109,14 @@ class SubtitleGenerator:
                 if mode == "cloud" and translator:
                     translated.append(translator.translate(orig))
                 else:
-                    # Pas 1: traducere strictă
-                    local = self._translate_ollama(orig, target_lang)
-                    first_pass = local or orig
-                    # Pas 2: validare/QA cu același model, prompt strict
+                    # Mod local: 1) Google translate  2) QA cu Ollama (strict)
+                    try:
+                        first_pass = GoogleTranslator(source="auto", target=target_lang).translate(orig)
+                    except Exception as e:
+                        logging.warning("[SUBTITLE] Google translate fallback local: %s", e)
+                        local = self._translate_ollama(orig, target_lang)
+                        first_pass = local or orig
+
                     check_prompt = (
                         "Ești un verificator de traduceri. Primești textul sursă și traducerea în română. "
                         "Verifici fidelitatea și corectezi doar dacă e nevoie. "
@@ -112,18 +126,24 @@ class SubtitleGenerator:
                     )
                     qa_resp = ""
                     try:
-                        qa = requests.post(
-                            f"{self._ollama_host}/v1/completions",
-                            json={
-                                "model": self._ollama_model,
-                                "prompt": check_prompt,
-                                "options": {"temperature": 0.2},
-                            },
-                            timeout=60,
-                        )
-                        if qa.ok:
-                            qa_data = qa.json()
-                            qa_resp = (qa_data.get("choices") or [{}])[0].get("text", "").strip()
+                        for mdl in self._ollama_models:
+                            try:
+                                qa = requests.post(
+                                    f"{self._ollama_host}/v1/completions",
+                                    json={
+                                        "model": mdl,
+                                        "prompt": check_prompt,
+                                        "options": {"temperature": 0.1},
+                                    },
+                                    timeout=60,
+                                )
+                                if qa.ok:
+                                    qa_data = qa.json()
+                                    qa_resp = (qa_data.get("choices") or [{}])[0].get("text", "").strip()
+                                    if qa_resp:
+                                        break
+                            except Exception as e:
+                                logging.warning("[SUBTITLE] QA model %s fallback: %s", mdl, e)
                     except Exception as e:
                         logging.warning("[SUBTITLE] QA fallback: %s", e)
 
