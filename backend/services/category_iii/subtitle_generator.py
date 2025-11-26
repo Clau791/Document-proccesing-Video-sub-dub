@@ -59,13 +59,20 @@ class SubtitleGenerator:
     def _translate_ollama(self, text: str, target_lang: str) -> str:
         try:
             import requests
-            prompt = (
-                f"Tradu în limba {target_lang} textul următor, păstrând sensul și numele proprii. "
-                f"Returnează DOAR traducerea:\n\n{text}"
+            system_prompt = (
+                f"Ești un traducător profesionist. Tradu textul EXACT în limba {target_lang}. "
+                f"Păstrează sensul, numele proprii și ordinea logică. "
+                f"Nu adăuga comentarii, note, explicații sau text suplimentar. "
+                f"Output-ul trebuie să conțină DOAR traducerea în {target_lang}."
             )
+            user_prompt = f"Text: {text}\nTraducere:"
             resp = requests.post(
                 f"{self._ollama_host}/v1/completions",
-                json={"model": self._ollama_model, "prompt": prompt},
+                json={
+                    "model": self._ollama_model,
+                    "prompt": f"{system_prompt}\n\n{user_prompt}",
+                    "options": {"temperature": 0.2},
+                },
                 timeout=60,
             )
             if resp.ok:
@@ -92,8 +99,38 @@ class SubtitleGenerator:
                 if mode == "cloud" and translator:
                     translated.append(translator.translate(orig))
                 else:
+                    # Pas 1: traducere strictă
                     local = self._translate_ollama(orig, target_lang)
-                    translated.append(local or orig)
+                    first_pass = local or orig
+                    # Pas 2: validare/QA cu același model, prompt strict
+                    check_prompt = (
+                        "Ești un verificator de traduceri. Primești textul sursă și traducerea în română. "
+                        "Verifici fidelitatea și corectezi doar dacă e nevoie. "
+                        "Nu adăuga explicații sau note. Output = fie „OK” dacă e corect, "
+                        "fie traducerea corectată în română (DOAR textul)."
+                        f"\n\nSursă: {orig}\nTraducere: {first_pass}\nRăspuns:"
+                    )
+                    qa_resp = ""
+                    try:
+                        qa = requests.post(
+                            f"{self._ollama_host}/v1/completions",
+                            json={
+                                "model": self._ollama_model,
+                                "prompt": check_prompt,
+                                "options": {"temperature": 0.2},
+                            },
+                            timeout=60,
+                        )
+                        if qa.ok:
+                            qa_data = qa.json()
+                            qa_resp = (qa_data.get("choices") or [{}])[0].get("text", "").strip()
+                    except Exception as e:
+                        logging.warning("[SUBTITLE] QA fallback: %s", e)
+
+                    if qa_resp and qa_resp.upper() != "OK":
+                        translated.append(qa_resp)
+                    else:
+                        translated.append(first_pass)
             except Exception as e:  # pragma: no cover - doar log, nu vrem să spargem fluxul
                 logging.warning("Traducere eșuată pentru segment: %s", e)
                 translated.append(orig)
