@@ -17,7 +17,7 @@ const RedubVideoPage: React.FC = () => {
   const [urlError, setUrlError] = useState<string | null>(null);
   const [progress, setProgress] = useState<number>(0);
   const [stage, setStage] = useState<string>("");
-  const [translatorMode, setTranslatorMode] = useState<"cloud" | "local">("cloud");
+  const [translatorMode, setTranslatorMode] = useState<"cloud" | "local">("local");
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length) {
@@ -114,7 +114,7 @@ const RedubVideoPage: React.FC = () => {
             <div>
               <h2 className="text-2xl font-bold text-gray-800 mb-2">III.2 - Redublare Video (Audio Înlocuit)</h2>
               <p className="text-gray-600 mb-2">Traducere audio RO ↔ EN + înlocuire + rezumat</p>
-              <p className="text-xs text-gray-400 font-mono">Endpoint: POST /api/redub-video</p>
+              {/* <p className="text-xs text-gray-400 font-mono">: POST /api/redub-video</p> */}
             </div>
           </div>
         </div>
@@ -144,7 +144,7 @@ const RedubVideoPage: React.FC = () => {
                     className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 w-full"
                   >
                     <option value="cloud">Cloud (GoogleTranslator)</option>
-                    <option value="local">Local AI (Ollama qwen2.5:32b)</option>
+                    <option value="local">Adrian's AI</option>
                   </select>
                 </div>
                 <div>

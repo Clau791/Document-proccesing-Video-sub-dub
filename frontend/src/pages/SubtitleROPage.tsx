@@ -22,7 +22,7 @@ const SubtitleROPage: React.FC = () => {
   const [showUrlInput, setShowUrlInput] = useState(false);
   const [videoUrl, setVideoUrl] = useState("");
   const [urlError, setUrlError] = useState<string | null>(null);
-  const [translatorMode, setTranslatorMode] = useState<"cloud" | "local">("cloud");
+  const [translatorMode, setTranslatorMode] = useState<"cloud" | "local">("local");
 
   useEffect(() => {
     const es = new EventSource(`${BASE_URL}/events`);
@@ -225,7 +225,7 @@ const SubtitleROPage: React.FC = () => {
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
                     >
                       <option value="cloud">Cloud (GoogleTranslator)</option>
-                      <option value="local">Local AI (Ollama qwen2.5:32b)</option>
+                      <option value="local"> Adrian's AI </option>
                     </select>
                   </div>
                 </div>

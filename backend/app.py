@@ -159,7 +159,7 @@ def generate_unique_filename(original_filename):
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     unique_id = str(uuid.uuid4())[:8]
     name, ext = os.path.splitext(original_filename)
-    return f"{timestamp}_{unique_id}_{secure_filename(name)}{ext}"
+    return original_filename
 
 # ============================================
 # INIȚIALIZARE FLASK
