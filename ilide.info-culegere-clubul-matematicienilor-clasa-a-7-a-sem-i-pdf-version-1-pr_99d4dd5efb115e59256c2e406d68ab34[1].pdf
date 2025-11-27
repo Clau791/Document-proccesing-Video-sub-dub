@@ -1,240 +1,257 @@
+pip install piper-tts onnxruntime-gpu num2words ffmpeg-python
 import os
+import shutil
 import subprocess
 import requests
-import json
+import re
+import wave
 from pathlib import Path
-from typing import List, Optional
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import torch
 import whisper
+import ffmpeg
 from pydub import AudioSegment
+from deep_translator import GoogleTranslator
+from num2words import num2words
 
-# === CONFIGURARE ===
+# === CONFIGURARE GLOBALA ===
 OLLAMA_URL = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-# Ordine de preferință: calitate maximă apoi fallback
-OLLAMA_MODELS = [
-    os.getenv("OLLAMA_MODEL_PRIMARY", "llama3:70b"),
-    os.getenv("OLLAMA_MODEL_FALLBACK", "qwen3:30b"),
-]
-os.environ["COQUI_TOS_AGREED"] = "1"
-PROCESSED_DIR = Path("processed")
+OLLAMA_MODEL = "qwen2.5:32b"
+MAX_WORKERS_TRANSLATION = 8 
+
+# === CONFIGURARE VOCI (Piper) ===
+MODELS_DIR = Path("piper_models")
+MODELS_DIR.mkdir(exist_ok=True)
+
+# Definim vocile disponibile și URL-urile lor
+VOICES_CONFIG = {
+    "mihaela": {
+        "description": "Feminin, Calmă, Calitate Medie (Standard)",
+        "onnx": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/ro/ro_RO/mihaela/medium/ro_RO-mihaela-medium.onnx",
+        "json": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/ro/ro_RO/mihaela/medium/ro_RO-mihaela-medium.onnx.json"
+    },
+    "doru": {
+        "description": "Masculin, Serios, Calitate Medie",
+        "onnx": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/ro/ro_RO/doru/medium/ro_RO-doru-medium.onnx",
+        "json": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/ro/ro_RO/doru/medium/ro_RO-doru-medium.onnx.json"
+    }
+}
+
+PROCESSED_DIR = Path("processed_multivoice")
 PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+
+
+class TextNormalizer:
+    @staticmethod
+    def normalize(text: str) -> str:
+        if not text: return ""
+        text = text.replace("%", " la sută ").replace("+", " plus ").replace("&", " și ")
+        def replace_num(match):
+            val = match.group(0).replace(',', '.')
+            try:
+                if '.' in val: return num2words(float(val), lang='ro')
+                return num2words(int(val), lang='ro')
+            except: return val
+        text = re.sub(r'\d+[.,]?\d*', replace_num, text)
+        return " ".join(text.split())
 
 class AudioTools:
     @staticmethod
     def extract_wav(video_path: Path, out_path: Path, sr: int = 22050):
+        # Ambele modele (Doru si Mihaela) sunt 'medium' la 22050Hz
         cmd = ["ffmpeg", "-y", "-i", str(video_path), "-vn", "-ac", "1", "-ar", str(sr), "-f", "wav", str(out_path)]
         subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     @staticmethod
-    def get_voice_sample(video_path: Path, out_sample_path: Path):
-        # Extrage 8 secunde de la minutul 00:30 sau 20% din durată
-        cmd = ["ffmpeg", "-y", "-ss", "00:00:15", "-t", "8", "-i", str(video_path),
-               "-vn", "-ac", "1", "-ar", "22050", "-f", "wav", str(out_sample_path)]
-        # Fallback simplu dacă ffmpeg dă eroare (ex: video prea scurt), nu oprim scriptul
+    def high_quality_stretch(input_wav: Path, target_duration_ms: float, output_wav: Path):
+        if not input_wav.exists(): return False
         try:
-            subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        except:
-            print("[WARN] Nu s-a putut extrage sample voce, se va folosi default.")
-        return out_sample_path
+            probe = ffmpeg.probe(str(input_wav))
+            duration = float(probe['format']['duration'])
+        except: return False
 
-    @staticmethod
-    def smart_stretch(audio_path: Path, target_duration_ms: float) -> AudioSegment:
-        seg = AudioSegment.from_file(audio_path)
-        if len(seg) < 100: return seg
+        if duration < 0.1: return False
+        ratio = (target_duration_ms / 1000.0) / duration
         
-        ratio = len(seg) / target_duration_ms
-        # Qwen ar trebui să rezolve lungimea, deci permitem doar corecții fine (max 1.2x)
-        if ratio > 1.25:
-            ratio = 1.25 # Cap at 1.25x speedup
-        elif ratio < 0.9:
-            ratio = 1.0 # Nu încetinim dacă e prea scurt, lăsăm pauză
-
-        if 0.95 <= ratio <= 1.05: return seg
-        return seg.speedup(playback_speed=ratio)
-
-class LLMTranslator:
-    """Interfață cu Ollama (model primar + fallback) pentru traduceri optimizate de dublaj."""
-    def _init_(self):
-        self.api_url = f"{OLLAMA_URL}/v1/completions"
-        self.models = OLLAMA_MODELS
-
-    def translate_for_dubbing(self, text: str) -> str:
-        if not text.strip(): return ""
+        # Limite de siguranță
+        if ratio < 0.85: ratio = 0.85
+        if ratio > 1.25: ratio = 1.25
         
-        # Prompt ingineresc pentru sincronizare labială (aproximativă) și durată
-        system_prompt = (
-            "You are a professional dubbing translator for movies. "
-            "Translate the input text from English to Romanian. "
-            "CRITICAL CONSTRAINTS:\n"
-            "1. The Romanian translation MUST have roughly the same speaking duration as the English text.\n"
-            "2. Be conversational and natural. Use 'tu' instead of 'dumneavoastră' unless strictly formal.\n"
-            "3. If the direct translation is too long, shorten it by paraphrasing while keeping the meaning.\n"
-            "4. Output ONLY the Romanian translation. No quotes, no explanations."
-        )
-
         try:
-            for mdl in self.models:
-                payload = {
-                    "model": mdl,
-                    "prompt": f"{system_prompt}\n\nInput: \"{text}\"\nTranslation:",
-                    "stream": False,
-                    "options": {
-                        "temperature": 0.1,  # determinism ridicat
-                        "num_ctx": 4096
-                    }
-                }
-                try:
-                    resp = requests.post(self.api_url, json=payload, timeout=60)
-                    if resp.status_code == 200:
-                        result = resp.json().get("response", "").strip()
-                        return result.replace('"', '').replace("Translation:", "").strip()
-                except Exception as e:
-                    print(f"[LLM Error][{mdl}] {e}")
-        except Exception as e:
-            print(f"[LLM Error] {e}")
-        return text
-
-class XTTSEngine:
-    def _init_(self):
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        print(f"[TTS] Loading Coqui VITS RO on {device}...")
-        from TTS.api import TTS
-        self.tts = TTS("tts_models/ro/cv/vits").to(device)
-
-    def synthesize(self, text: str, speaker_wav: Optional[Path], out_path: Path):
-        try:
-            # VITS ro este single-speaker; nu trimitem speaker_wav
-            self.tts.tts_to_file(
-                text=text,
-                file_path=str(out_path),
-                language="ro"
+            (
+                ffmpeg.input(str(input_wav))
+                .filter('atempo', 1.0 / ratio)
+                .output(str(output_wav))
+                .overwrite_output().run(quiet=True)
             )
             return True
+        except Exception: return False
+
+class LLMTranslator:
+    def _init_(self):
+        self.api_url = f"{OLLAMA_URL}/v1/completions"
+        self.google = GoogleTranslator(source='auto', target='ro')
+
+    def translate_and_adapt(self, text: str, duration: float) -> str:
+        try: base_ro = self.google.translate(text)
+        except: base_ro = text
+
+        if duration < 1.0 and len(base_ro.split()) < 3: return base_ro
+
+        prompt = (
+            f"Ești editor dublaj. Timp: {duration:.1f}s. Orig: '{text}'. Draft: '{base_ro}'. "
+            "Rescrie textul românesc să fie NATURAL și SCURT. Returnează DOAR textul."
+        )
+        try:
+            resp = requests.post(self.api_url, json={
+                "model": OLLAMA_MODEL, "prompt": prompt, "stream": False, "options": {"temperature": 0.2, "num_ctx": 2048}
+            }, timeout=3)
+            if resp.ok:
+                res = resp.json().get("choices", [{}])[0].get("text", "").strip().replace('"','')
+                if len(res) > 1: return res
+        except: pass
+        return base_ro
+
+class PiperEngine:
+    """Motor TTS care suportă schimbarea dinamică a vocii."""
+    
+    def _init_(self, voice_name: str = "mihaela"):
+        if voice_name not in VOICES_CONFIG:
+            print(f"[WARN] Vocea '{voice_name}' nu există. Folosesc 'mihaela'.")
+            voice_name = "mihaela"
+            
+        self.voice_name = voice_name
+        self.config = VOICES_CONFIG[voice_name]
+        
+        self.model_path = MODELS_DIR / f"{voice_name}.onnx"
+        self.config_path = MODELS_DIR / f"{voice_name}.onnx.json"
+        
+        self._ensure_model()
+        
+        print(f"[TTS] Loading Piper Voice: {voice_name} ({self.config['description']})")
+        try:
+            import piper
+            self.voice = piper.PiperVoice.load(
+                str(self.model_path), 
+                config_path=str(self.config_path), 
+                use_cuda=torch.cuda.is_available()
+            )
+        except ImportError:
+            raise RuntimeError("Rulează: pip install piper-tts")
+
+    def _ensure_model(self):
+        """Descarcă fișierele specifice vocii selectate."""
+        if not self.model_path.exists():
+            print(f"[TTS] Downloading {self.voice_name} model...")
+            with open(self.model_path, 'wb') as f:
+                f.write(requests.get(self.config['onnx']).content)
+                
+        if not self.config_path.exists():
+            print(f"[TTS] Downloading {self.voice_name} config...")
+            with open(self.config_path, 'wb') as f:
+                f.write(requests.get(self.config['json']).content)
+
+    def synthesize(self, text: str, out_path: Path):
+        if not text: return False
+        try:
+            with wave.open(str(out_path), "wb") as wav_file:
+                self.voice.synthesize(text, wav_file)
+            return True
         except Exception as e:
-            print(f"[TTS Error] {e}")
+            print(f"[Piper Error] {e}")
             return False
 
 class VideoRedubber:
-    """Pipeline alternativ de redublare, compatibil cu semnătura folosită în app.py."""
-
     def _init_(self):
-        # Inițializăm componentele
-        print("[INIT] Loading Whisper (large-v3)...")
-        # Folosim aceeași tehnică ca la subtitle_generator: lazy load și device selectat
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.whisper = whisper.load_model("large-v3", device=device)
+        print("[INIT] Ready.")
         self.llm = LLMTranslator()
-        # TTS se încarcă la cerere sau aici, atenție la VRAM!
-        self.tts = XTTSEngine()
 
-    def run(self, video_path: str, dest_lang: str = "ro", speaker_wav: Optional[str] = None, translator_mode: str = "local"):
-        """Compatibil cu semnătura VideoRedubber.redub."""
+    def run(self, video_path: str, voice: str = "mihaela"):
+        """
+        Args:
+            video_path: Calea către video.
+            voice: 'mihaela' (feminin) sau 'doru' (masculin).
+        """
         video_path = Path(video_path)
-        job_id = video_path.stem
+        job_id = f"{video_path.stem}_{voice}"
         work_dir = PROCESSED_DIR / job_id
+        if work_dir.exists(): shutil.rmtree(work_dir)
         work_dir.mkdir(parents=True, exist_ok=True)
 
-        # 1. Audio
-        print("1. Extracting audio & voice sample...")
+        print(f"\n=== JOB START: {video_path.name} | Voice: {voice.upper()} ===")
+        
+        # 1. Init TTS cu vocea cerută
+        tts_engine = PiperEngine(voice_name=voice)
+
+        # 2. Extract & Transcribe
         full_wav = work_dir / "original.wav"
-        voice_ref = work_dir / "voice_ref.wav"
-        if not full_wav.exists():
-            AudioTools.extract_wav(video_path, full_wav)
-            AudioTools.get_voice_sample(video_path, voice_ref)
-
-        # 2. Transcriere
-        print("2. Transcribing with Whisper...")
-        # Folosim word_timestamps pentru acuratețe mai mare
-        # Aceeași abordare ca în subtitle_generator: task="transcribe" simplu, fără word_timestamps
-        transcription = self.whisper.transcribe(str(full_wav), task="transcribe", verbose=False)
-        segments = transcription.get("segments", [])
-        detected_lang = transcription.get("language", "auto")
-
-        # 3. Procesare Loop (Translate -> TTS -> Stretch)
-        print(f"3. Processing {len(segments)} segments with Qwen2.5 & XTTS...")
+        AudioTools.extract_wav(video_path, full_wav)
         
-        final_timeline = AudioSegment.silent(duration=0)
-        cursor_ms = 0 # Unde suntem în timeline-ul final
+        print("[STEP 1] Transcribing...")
+        model = whisper.load_model("large-v3", device="cuda" if torch.cuda.is_available() else "cpu")
+        res = model.transcribe(str(full_wav), task="transcribe", verbose=False)
+        segments = res["segments"]
+        del model; torch.cuda.empty_cache()
 
-        for i, seg in enumerate(segments):
-            start_ms = int(seg['start'] * 1000)
-            end_ms = int(seg['end'] * 1000)
-            orig_duration = end_ms - start_ms
-            text_en = seg['text'].strip()
-
-            if not text_en or orig_duration < 500:
-                continue
-
-            # A. Traducere: cloud (Google) sau local (Ollama)
-            if translator_mode == "cloud":
-                try:
-                    text_ro = GoogleTranslator(source="auto", target=dest_lang).translate(text_en)
-                except Exception as e:
-                    print(f"[Translate cloud fallback -> LLM] {e}")
-                    text_ro = self.llm.translate_for_dubbing(text_en)
-            else:
-                text_ro = self.llm.translate_for_dubbing(text_en)
-            print(f"   [{i}] EN: {text_en}\n       RO: {text_ro}")
-
-            # B. TTS
-            seg_file = work_dir / f"seg_{i}.wav"
-            success = self.tts.synthesize(text_ro, voice_ref, seg_file)
-
-            if success and seg_file.exists():
-                # C. Smart Stretch
-                audio_chunk = AudioTools.smart_stretch(seg_file, orig_duration)
-            else:
-                audio_chunk = AudioSegment.silent(duration=orig_duration)
-
-            # D. Asamblare Timeline (Sync Logic)
-            # Calculăm câtă liniște trebuie între segmentul anterior și acesta
-            gap = start_ms - cursor_ms
-            if gap > 0:
-                final_timeline += AudioSegment.silent(duration=gap)
-            elif gap < 0:
-                # Overlap! Tăiem din pauza anterioară sau facem crossfade dacă e grav
-                # Aici simplificăm: ignorăm suprapunerea mică, dar resetăm cursorul
-                pass
+        # 3. Translate
+        print(f"[STEP 2] Translating ({len(segments)} segments)...")
+        translated_data = [None] * len(segments)
+        
+        def process(idx, seg):
+            dur = seg['end'] - seg['start']
+            txt = seg['text'].strip()
+            if not txt or dur < 0.2: return None
             
-            final_timeline += audio_chunk
-            cursor_ms = start_ms + len(audio_chunk) # Actualizăm cursorul real
+            ro = self.llm.translate_and_adapt(txt, dur)
+            return {"idx": idx, "start": seg['start'], "duration": dur, "text": TextNormalizer.normalize(ro)}
 
-        # 4. Export
-        print("4. Muxing final video...")
-        dub_wav = work_dir / "dub_track.wav"
-        final_timeline.export(dub_wav, format="wav")
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS_TRANSLATION) as exc:
+            futures = {exc.submit(process, i, s): i for i, s in enumerate(segments)}
+            for f in as_completed(futures):
+                r = f.result()
+                if r: translated_data[r['idx']] = r
+
+        # 4. Synthesize
+        print(f"[STEP 3] Synthesizing with voice: {voice}...")
+        final_timeline = AudioSegment.silent(duration=0)
+        cursor_ms = 0
         
-        out_video = PROCESSED_DIR / f"{job_id}_RO_Qwen.mp4"
-        cmd = [
-            "ffmpeg", "-y", "-i", str(video_path), "-i", str(dub_wav),
+        for item in [x for x in translated_data if x is not None]:
+            idx = item['idx']
+            raw_p = work_dir / f"raw_{idx}.wav"
+            fin_p = work_dir / f"fin_{idx}.wav"
+            
+            if tts_engine.synthesize(item['text'], raw_p):
+                AudioTools.high_quality_stretch(raw_p, item['duration']*1000, fin_p)
+                chunk = AudioSegment.from_file(fin_p if fin_p.exists() else raw_p)
+            else:
+                chunk = AudioSegment.silent(duration=int(item['duration']*1000))
+            
+            gap = int(item['start']*1000) - cursor_ms
+            if gap > 0: final_timeline += AudioSegment.silent(duration=gap)
+            final_timeline += chunk
+            cursor_ms = int(item['start']*1000) + len(chunk)
+
+        # 5. Mux
+        out = PROCESSED_DIR / f"{video_path.stem}_{voice}.mp4"
+        dub = work_dir / "dub.wav"
+        final_timeline.export(dub, format="wav")
+        
+        subprocess.run([
+            "ffmpeg", "-y", "-i", str(video_path), "-i", str(dub),
             "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy", "-c:a", "aac",
-            "-shortest", str(out_video)
-        ]
-        subprocess.run(cmd, check=True)
-        print(f"DONE! Video: {out_video}")
-
-        return {
-            "video_file": f"/download/{out_video.name}",
-            "subtitle_file": "",
-            "summary_file": "",
-            "summary_text": "",
-            "audio_file": f"/download/{dub_wav.name}",
-            "detected_language": detected_lang,
-            "processed_dir": str(PROCESSED_DIR),
-            "note": "SecondVideo pipeline (LLM translate + RO TTS)"
-        }
-
-    def redub(self, video_path: str, dest_lang: str = "ro", speaker_wav: Optional[str] = None, translator_mode: str = "local"):
-        return self.run(video_path, dest_lang=dest_lang, speaker_wav=speaker_wav, translator_mode=translator_mode)
+            "-shortest", str(out)
+        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
+        print(f"[DONE] Video salvat: {out}")
+        return str(out)
 
 if _name_ == "_main_":
-    # Verifică să ai Ollama pornit!
-    try:
-        requests.get("http://localhost:11434")
-    except:
-        print("EROARE: Ollama nu pare să fie pornit. Rulează 'ollama serve' în alt terminal.")
-        exit()
-
-    pipeline = VideoRedubber()
-    pipeline.redub("video_tau.mp4")
+    redubber = VideoRedubber()
+    
+    # Exemplu 1: Cu voce feminină (Default)
+    redubber.run("input.mp4", voice="mihaela")
+    
+    # Exemplu 2: Cu voce masculină
+    # redubber.run("input.mp4", voice="doru")
