@@ -1,4 +1,66 @@
-pip install piper-tts onnxruntime-gpu num2words ffmpeg-python
+@app.route('/api/redub-video', methods=['POST'])
+def redub_video():
+    """III.2: Redublare Video cu detectare automată a limbii și TTS local (RTX-ready)."""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+        
+        file = request.files['file']
+        voice_sample = request.files.get('voice_sample')  # opțional pentru voice cloning
+        dest_lang = request.form.get('dest_lang', 'ro').lower()
+        translator_mode = request.form.get('translator_mode', 'cloud').lower()
+        detail_level = request.form.get('detail_level', 'medium')
+        
+        if not validate_file(file, 'redub'):
+            return jsonify({'error': 'Invalid file type'}), 400
+        
+        filename = generate_unique_filename(file.filename)
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
+        file.save(filepath)
+
+        speaker_wav_path = None
+        if voice_sample:
+            speaker_name = f"{Path(filename).stem}_voice.wav"
+            speaker_wav_path = os.path.join(UPLOAD_FOLDER, speaker_name)
+            voice_sample.save(speaker_wav_path)
+        
+        print(f"\n[REDUB] AUTO → {dest_lang.upper()}: {filename}")
+        
+        redubber = VideoRedubber()
+        result = redubber.redub(filepath, dest_lang=dest_lang, speaker_wav=speaker_wav_path, translator_mode=translator_mode)
+        
+        response_payload = {
+            'service': 'Video Redub',
+            'originalFile': filename,
+            'originalLanguage': result.get('detected_language', 'auto').upper(),
+            'targetLanguage': dest_lang.upper(),
+            'downloadUrl': result.get('video_file', ''),
+            'subtitleUrl': result.get('subtitle_file', ''),
+            'summaryUrl': result.get('summary_file', ''),
+            'detailLevel': detail_level,
+            'status': 'success',
+            **result
+        }
+        add_history(
+            'redub-video',
+            filename,
+            response_payload.get('downloadUrl'),
+            meta={
+                'target_lang': dest_lang,
+                'translator_mode': translator_mode,
+                'detail_level': detail_level,
+                'subtitle_url': response_payload.get('subtitleUrl')
+            },
+            summary_url=response_payload.get('summaryUrl') or result.get('summary_file'),
+            summary_text=result.get('summary_text') or ""
+        )
+        return jsonify(response_payload), 200
+        
+    except Exception as e:
+        print(f"[REDUB] ERROR: {e}")
+
+
+
 import os
 import shutil
 import subprocess
@@ -38,7 +100,8 @@ VOICES_CONFIG = {
     }
 }
 
-PROCESSED_DIR = Path("processed_multivoice")
+# Scriem rezultatele în același director pe care îl servește /download din app.py
+PROCESSED_DIR = Path("processed")
 PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 
 
@@ -91,17 +154,18 @@ class AudioTools:
 class LLMTranslator:
     def _init_(self):
         self.api_url = f"{OLLAMA_URL}/v1/completions"
-        self.google = GoogleTranslator(source='auto', target='ro')
+        self.google = None  # inițializat lazy cu limba corectă
 
-    def translate_and_adapt(self, text: str, duration: float) -> str:
-        try: base_ro = self.google.translate(text)
+    def translate_and_adapt(self, text: str, duration: float, dest_lang: str = "ro") -> str:
+        try:
+            base_ro = GoogleTranslator(source='auto', target=dest_lang).translate(text)
         except: base_ro = text
 
         if duration < 1.0 and len(base_ro.split()) < 3: return base_ro
 
         prompt = (
             f"Ești editor dublaj. Timp: {duration:.1f}s. Orig: '{text}'. Draft: '{base_ro}'. "
-            "Rescrie textul românesc să fie NATURAL și SCURT. Returnează DOAR textul."
+            f"Rescrie textul în {dest_lang.upper()} să fie NATURAL și SCURT. Returnează DOAR textul."
         )
         try:
             resp = requests.post(self.api_url, json={
@@ -116,7 +180,7 @@ class LLMTranslator:
 class PiperEngine:
     """Motor TTS care suportă schimbarea dinamică a vocii."""
     
-    def _init_(self, voice_name: str = "mihaela"):
+    def _init_(self, voice_name: str = "doru"):
         if voice_name not in VOICES_CONFIG:
             print(f"[WARN] Vocea '{voice_name}' nu există. Folosesc 'mihaela'.")
             voice_name = "mihaela"
@@ -167,11 +231,13 @@ class VideoRedubber:
         print("[INIT] Ready.")
         self.llm = LLMTranslator()
 
-    def run(self, video_path: str, voice: str = "mihaela"):
+    def run(self, video_path: str, voice: str = "mihaela", dest_lang: str = "ro", translator_mode: str = "cloud"):
         """
         Args:
             video_path: Calea către video.
             voice: 'mihaela' (feminin) sau 'doru' (masculin).
+            dest_lang: Limba țintă (default: ro).
+            translator_mode: Compatibilitate cu semnătura din app.py (cloud/local).
         """
         video_path = Path(video_path)
         job_id = f"{video_path.stem}_{voice}"
@@ -191,6 +257,7 @@ class VideoRedubber:
         print("[STEP 1] Transcribing...")
         model = whisper.load_model("large-v3", device="cuda" if torch.cuda.is_available() else "cpu")
         res = model.transcribe(str(full_wav), task="transcribe", verbose=False)
+        detected_lang = res.get("language", "auto")
         segments = res["segments"]
         del model; torch.cuda.empty_cache()
 
@@ -202,8 +269,9 @@ class VideoRedubber:
             dur = seg['end'] - seg['start']
             txt = seg['text'].strip()
             if not txt or dur < 0.2: return None
-            
-            ro = self.llm.translate_and_adapt(txt, dur)
+
+            # translator_mode este păstrat pentru compatibilitate; pipeline-ul folosește Google + Ollama fallback
+            ro = self.llm.translate_and_adapt(txt, dur, dest_lang=dest_lang)
             return {"idx": idx, "start": seg['start'], "duration": dur, "text": TextNormalizer.normalize(ro)}
 
         with ThreadPoolExecutor(max_workers=MAX_WORKERS_TRANSLATION) as exc:
@@ -235,7 +303,8 @@ class VideoRedubber:
 
         # 5. Mux
         out = PROCESSED_DIR / f"{video_path.stem}_{voice}.mp4"
-        dub = work_dir / "dub.wav"
+        # Mutăm pista audio finală în processed/ pentru a fi servită prin /download
+        dub = PROCESSED_DIR / f"{video_path.stem}_{voice}_dub.wav"
         final_timeline.export(dub, format="wav")
         
         subprocess.run([
@@ -245,13 +314,26 @@ class VideoRedubber:
         ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         
         print(f"[DONE] Video salvat: {out}")
-        return str(out)
+        return {
+            "video_file": f"/download/{out.name}",
+            "subtitle_file": "",
+            "summary_file": "",
+            "summary_text": "",
+            "audio_file": f"/download/{dub.name}",
+            "detected_language": detected_lang,
+            "processed_dir": str(PROCESSED_DIR),
+        }
+
+    def redub(self, video_path: str, dest_lang: str = "ro", speaker_wav: str = None, translator_mode: str = "cloud"):
+        """Alias compatibil cu app.py; voice cloning nu este folosit în această implementare."""
+        return self.run(video_path, dest_lang=dest_lang, translator_mode=translator_mode)
 
 if _name_ == "_main_":
     redubber = VideoRedubber()
     
     # Exemplu 1: Cu voce feminină (Default)
-    redubber.run("input.mp4", voice="mihaela")
+    redubber.run("input.mp4", voice="doru")
     
     # Exemplu 2: Cu voce masculină
     # redubber.run("input.mp4", voice="doru")
+        return jsonify({'error': str(e)}), 500
