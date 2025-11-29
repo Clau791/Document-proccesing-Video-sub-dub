@@ -60,101 +60,108 @@ class SubtitleGenerator:
         language = result.get("language", "auto")
         return segments, language
 
-    def _translate_ollama(self, text: str, target_lang: str) -> str:
-        try:
-            import requests
-            system_prompt = (
-                f"Ești un traducător profesionist. Tradu textul EXACT în limba {target_lang}. "
-                f"Păstrează sensul, numele proprii și ordinea logică. "
-                f"Nu adăuga comentarii, note, explicații sau text suplimentar. "
-                f"Output-ul trebuie să conțină DOAR traducerea în {target_lang}."
-            )
-            user_prompt = f"Text: {text}\nTraducere:"
-            for mdl in self._ollama_models:
-                try:
-                    resp = requests.post(
-                        f"{self._ollama_host}/v1/completions",
-                        json={
-                            "model": mdl,
-                            "prompt": f"{system_prompt}\n\n{user_prompt}",
-                            "options": {"temperature": 0.1},
+def _translate_ollama(self, text: str, target_lang: str, context_text: str = "") -> str:
+        """
+        Traduce folosind Ollama cu context (segmentul anterior).
+        Prompt strict pentru a evita halucinațiile.
+        """
+        # Folosim instrucțiuni în engleză pentru că modelele (Llama3, Qwen) 
+        # respectă mai bine constrângerile de format în engleză.
+        system_prompt = (
+            f"You are a professional subtitle translator engine. Translate the input text into {target_lang}. "
+            "STRICT RULES:\n"
+            "1. Output ONLY the translated text. No preamble, no quotes, no notes.\n"
+            "2. Do not translate the 'Context'. Use it only to understand the meaning (gender, continuity).\n"
+            "3. Keep the same tone and punctuation style as the source.\n"
+            "4. If the input is just noise or silence, return an empty string."
+        )
+
+        # Construim promptul cu context
+        user_prompt = (
+            f"Context (previous line): \"{context_text}\"\n"
+            f"Input to translate: \"{text}\"\n"
+            f"Translation:"
+        )
+
+        for mdl in self._ollama_models:
+            try:
+                # Recomand folosirea requests.Session() pentru performanță, dar păstrez structura ta
+                resp = requests.post(
+                    f"{self._ollama_host}/v1/completions",
+                    json={
+                        "model": mdl,
+                        "prompt": f"{system_prompt}\n\n{user_prompt}",
+                        "options": {
+                            "temperature": 0.1,  # Temperatura mică = determinism maxim
+                            "top_p": 0.9,
+                            "stop": ["\n", "Context:", "Input:"] # Stop words pentru a preveni logoreea
                         },
-                        timeout=60,
-                    )
-                    if resp.ok:
-                        data = resp.json()
-                        txt = (data.get("choices") or [{}])[0].get("text", "").strip()
-                        if txt:
-                            return txt
-                except Exception as e:
-                    logging.warning("[SUBTITLE] Ollama model %s fallback: %s", mdl, e)
-        except Exception as e:
-            logging.warning("[SUBTITLE] Ollama translate fallback: %s", e)
+                        "stream": False
+                    },
+                    timeout=45,
+                )
+                if resp.ok:
+                    data = resp.json()
+                    txt = (data.get("choices") or [{}])[0].get("text", "").strip()
+                    # Curățăm eventualele ghilimele adăugate greșit de model
+                    txt = txt.strip('"').strip("'")
+                    if txt:
+                        return txt
+            except Exception as e:
+                logging.warning("[SUBTITLE] Ollama model %s error: %s", mdl, e)
+        
         return ""
 
     def _translate_segments(self, segments: List[dict], target_lang: str, mode: str = "cloud") -> Tuple[List[str], List[str]]:
         """
         Returnează (texte_traduse, texte_originale).
-        În caz de eroare de traducere, întoarce textul original pentru acel segment.
+        Dacă mode != 'cloud' (ex: 'local' sau 'ollama'), încearcă Ollama PRIMUL.
+        Google Translate devine fallback.
         """
-        translator = GoogleTranslator(source="auto", target=target_lang) if mode == "cloud" else None
+        # Inițializăm fallback-ul doar dacă e nevoie
+        translator_fallback = GoogleTranslator(source="auto", target=target_lang)
+        
         translated, originals = [], []
-        for seg in segments:
+        prev_text = "" # Reținem textul anterior pentru context
+
+        for i, seg in enumerate(segments):
             orig = (seg.get("text") or "").strip()
             originals.append(orig)
+
             if not orig:
                 translated.append("")
+                prev_text = ""
                 continue
+
             try:
-                if mode == "cloud" and translator:
-                    translated.append(translator.translate(orig))
+                # 1. Mod CLOUD (Google pur)
+                if mode == "cloud":
+                    res = translator_fallback.translate(orig)
+                    translated.append(res)
+                    prev_text = res # Contextul devine traducerea
+                
+                # 2. Mod LOCAL / OLLAMA (Ollama First -> Google Fallback)
                 else:
-                    # Mod local: 1) Google translate  2) QA cu Ollama (strict)
-                    try:
-                        first_pass = GoogleTranslator(source="auto", target=target_lang).translate(orig)
-                    except Exception as e:
-                        logging.warning("[SUBTITLE] Google translate fallback local: %s", e)
-                        local = self._translate_ollama(orig, target_lang)
-                        first_pass = local or orig
-
-                    check_prompt = (
-                        "Ești un verificator de traduceri. Primești textul sursă și traducerea în română. "
-                        "Verifici fidelitatea și corectezi doar dacă e nevoie. "
-                        "Nu adăuga explicații sau note. Output = fie „OK” dacă e corect, "
-                        "fie traducerea corectată în română (DOAR textul)."
-                        f"\n\nSursă: {orig}\nTraducere: {first_pass}\nRăspuns:"
-                    )
-                    qa_resp = ""
-                    try:
-                        for mdl in self._ollama_models:
-                            try:
-                                qa = requests.post(
-                                    f"{self._ollama_host}/v1/completions",
-                                    json={
-                                        "model": mdl,
-                                        "prompt": check_prompt,
-                                        "options": {"temperature": 0.1},
-                                    },
-                                    timeout=60,
-                                )
-                                if qa.ok:
-                                    qa_data = qa.json()
-                                    qa_resp = (qa_data.get("choices") or [{}])[0].get("text", "").strip()
-                                    if qa_resp:
-                                        break
-                            except Exception as e:
-                                logging.warning("[SUBTITLE] QA model %s fallback: %s", mdl, e)
-                    except Exception as e:
-                        logging.warning("[SUBTITLE] QA fallback: %s", e)
-
-                    if qa_resp and qa_resp.upper() != "OK":
-                        translated.append(qa_resp)
+                    # Încercăm Ollama cu contextul anterior
+                    res = self._translate_ollama(orig, target_lang, context_text=prev_text)
+                    
+                    if res:
+                        translated.append(res)
+                        prev_text = res
                     else:
-                        translated.append(first_pass)
-            except Exception as e:  # pragma: no cover - doar log, nu vrem să spargem fluxul
-                logging.warning("Traducere eșuată pentru segment: %s", e)
-                translated.append(orig)
+                        # Fallback la Google dacă Ollama eșuează sau returnează gol
+                        logging.info(f"[SUBTITLE] Fallback Google pentru segment: {orig[:20]}...")
+                        fallback_res = translator_fallback.translate(orig)
+                        translated.append(fallback_res)
+                        prev_text = fallback_res
+
+            except Exception as e:
+                logging.warning("Traducere eșuată complet pentru segment: %s", e)
+                translated.append(orig) # Ultimul resort: textul original
+                prev_text = orig
+
         return translated, originals
+
 
     def _write_srt(self, segments: List[dict], texts: List[str], srt_path: Path):
         subs = pysubs2.SSAFile()
